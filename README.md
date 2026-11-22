@@ -13,13 +13,14 @@ Cloudflare Worker app: owner dashboard, crew portal, stock and shortage checker,
 | `src/files.js` | Photo and logo storage (R2) |
 | `src/pages.js` | Crew page and upgrade screen |
 | `src/owner.html` | Owner page shell |
-| `public/app/` | Owner app in the browser, one file per area (jobs, inventory, CRM, …) |
+| `public/app/` | Owner app in the browser, one file per area: overview, pipeline, calendar, jobs, inventory, CRM, … |
+| `public/app/styles.css` | Styles, with colour and spacing tokens at the top |
 | `public/app/stock.js` | Stock checks, shared by server and browser |
 | `migrations/` | D1 database schema |
 
 ## Docs
 - `docs/BUILD_PLAN.md`: the plan and status
-- `docs/DEPLOY.md`: how to deploy (Phases 1 and 2)
+- `docs/DEPLOY.md`: how to deploy (Phases 1 to 3)
 - `docs/RESTORE.md`: getting data back, and the restore drill
 - `docs/DATA_MODEL.md`: tables, saving and history
 - `docs/SECURITY_REVIEW.md`: security review

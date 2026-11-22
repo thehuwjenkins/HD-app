@@ -1,6 +1,6 @@
-# Deploying Phases 1 and 2
+# Deploying Phases 1 to 3
 
-This switches on backups, history and the new table storage in one go. Allow about 30 minutes.
+This switches on backups, history, the new table storage and the redesigned dashboard in one go. Allow about 30 minutes.
 Run the commands from the project folder with Wrangler signed in to the HD Events Cloudflare account.
 From now on, deploy with Wrangler (`npx wrangler deploy`), not by pasting files into the Cloudflare dashboard:
 the app is now several files plus database migrations.
@@ -21,7 +21,7 @@ Leave both private. Do not turn on public access or an `r2.dev` address.
 ```
 npx wrangler d1 migrations apply <your-database-name> --remote
 ```
-This runs the three files in `migrations/`. All of them only *add* tables: the first one recognises the
+This runs the files in `migrations/`. All of them only *add* tables: the first one recognises the
 existing `workspace` table and leaves it alone. Your current data is not touched.
 
 ## 3. Update `wrangler.toml`

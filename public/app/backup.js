@@ -69,14 +69,16 @@ async function hqBackupStatus() {
   const el = $("hqBackupStatus");
   try {
     const s = await hqApi("status");
-    el.className = "note " + (s.healthy ? "good" : "bad");
-    el.textContent = s.healthy
-      ? "✓ Last cloud backup " + hqWhen(s.lastSuccess.at)
-      : "⚠ " + s.problem + (s.lastSuccess ? " Last good backup " + hqWhen(s.lastSuccess.at) + "." : "");
+    el.className = "chip " + (s.healthy ? "good" : "bad");
+    const at = new Date(s.lastSuccess?.at || 0);
+    const short = at.toDateString() === new Date().toDateString() ? at.toLocaleTimeString("en-GB", { timeStyle: "short" }) : at.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    el.textContent = s.healthy ? "✓ Backed up " + short : "⚠ Backup needs attention";
+    el.title = s.healthy ? "History, backups, export and import" : s.problem + (s.lastSuccess ? " Last good backup " + hqWhen(s.lastSuccess.at) + "." : "");
     return s;
   } catch (e) {
-    el.className = "note bad";
-    el.textContent = "⚠ Could not check backups: " + e.message;
+    el.className = "chip bad";
+    el.textContent = "⚠ Backup status unknown";
+    el.title = e.message;
   }
 }
 
@@ -107,11 +109,11 @@ async function hqSafetyOpen() {
     const saves = audit.filter((a) => ["save", "restore"].includes(a.action) && a.summary?.saveId);
     root.innerHTML = `<div class="panel"><div class="line"><h2 style="margin:0">History &amp; backups</h2><button class="btn secondary" onclick="hqSafetyClose()">Close</button></div>
   <h2 style="margin-top:18px">Cloud backup</h2><p class="${s && s.healthy ? "" : "danger"}">${s ? esc(s.healthy ? "Healthy. Last backup " + hqWhen(s.lastSuccess.at) + ", " + hqSize(s.lastSuccess.bytes) + ", checked after writing." : s.problem) : "Status unavailable"}</p>
-  <button class="btn" onclick="hqBackupNow(this)">Back up now</button>
+  <div class="toolbar"><button class="btn" onclick="hqBackupNow(this)">Back up now</button><button class="btn secondary" onclick="hqExport()">Export all data</button><button class="btn secondary" onclick="$('hqImportFile').click()">Import backup file</button></div>
   <h2 style="margin-top:22px">Recent changes</h2><p class="hint">Every save keeps the records as they were before it (90 days). <b>Undo from here</b> puts back every record changed by that save and any later save. The undo can itself be undone.</p>
-  ${saves.length ? saves.map((a) => row(`<b>${hqWhen(a.at)}</b> · ${esc(a.action)} by ${esc(a.email)}<pre>${esc(hqSummary(a.summary))}</pre>`, `<button class="btn secondary" onclick="hqUndo(${a.summary.saveId},'${hqWhen(a.at)}')">Undo from here</button>`)).join("") : '<p class="muted">No changes recorded yet.</p>'}
+  ${saves.length ? saves.map((a) => row(`<b>${hqWhen(a.at)}</b> · ${esc(a.action)} by ${esc(a.email)}<pre>${esc(hqSummary(a.summary))}</pre>`, `<button class="btn small secondary" onclick="hqUndo(${a.summary.saveId},'${hqWhen(a.at)}')">Undo from here</button>`)).join("") : '<p class="muted">No changes recorded yet.</p>'}
   <h2 style="margin-top:22px">Daily and monthly backups</h2>
-  ${backups.length ? backups.slice(0, 60).map((b) => row(`<b>${esc(b.key)}</b><div class="muted">${hqSize(b.bytes)}</div>`, `<a class="btn secondary" style="text-decoration:none" href="/api/safety/download?key=${encodeURIComponent(b.key)}">Download</a> <button class="btn secondary" data-key="${esc(b.key)}" onclick="hqRestore(this.dataset.key)">Restore</button>`)).join("") : '<p class="muted">No cloud backups stored yet.</p>'}
+  ${backups.length ? backups.slice(0, 60).map((b) => row(`<b>${esc(b.key)}</b><div class="muted">${hqSize(b.bytes)}</div>`, `<a class="btn small secondary" href="/api/safety/download?key=${encodeURIComponent(b.key)}">Download</a> <button class="btn small secondary" data-key="${esc(b.key)}" onclick="hqRestore(this.dataset.key)">Restore</button>`)).join("") : '<p class="muted">No cloud backups stored yet.</p>'}
   <h2 style="margin-top:22px">Activity log</h2>
   ${audit.length ? audit.map((a) => row(`<b>${esc(a.action)}</b> · ${esc(a.email)}<div class="muted">${hqWhen(a.at)}</div><pre>${esc(hqSummary(a.summary))}</pre>`, "")).join("") : '<p class="muted">No activity recorded yet.</p>'}
   </div>`;

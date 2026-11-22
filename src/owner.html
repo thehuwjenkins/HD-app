@@ -9,7 +9,10 @@
 <script defer src="/app/overview.js"></script>
 <script defer src="/app/crm.js"></script>
 <script defer src="/app/staff.js"></script>
+<script defer src="/app/dates.js"></script>
 <script defer src="/app/jobs.js"></script>
+<script defer src="/app/pipeline.js"></script>
+<script defer src="/app/calendar.js"></script>
 <script defer src="/app/print.js"></script>
 <script defer src="/app/inventory.js"></script>
 <script defer src="/app/packages.js"></script>
@@ -17,13 +20,19 @@
 <script defer src="/app/branding.js"></script>
 <script defer src="/app/backup.js"></script>
 <script defer src="/app/main.js"></script>
-</head><body><div class="app"><aside class="side"><div class="brand" id="brandMark">HD <span>EVENTS</span></div><div class="subtitle">BUSINESS HQ</div><div id="nav"></div></aside><main class="main"><div class="top"><div><div class="eyebrow">Business control centre</div><h1 id="heading">Overview</h1><p id="description">Everything that needs your attention, in one place.</p></div><div class="top-right"><div id="turnoverTop" class="turnover-box"></div><div class="pill"><span id="syncState" role="status">Shared workspace</span> · <a style="color:inherit" href="/cdn-cgi/access/logout">Sign out</a></div></div></div><div id="content"></div><div class="footer">Prototype v8 · Records are saved to the shared cloud workspace with version history and daily backups.</div></main></div>
-<div id="backup-tools">
-<strong>Workspace backup</strong><div>
-<button onclick="hqExport()">Export all data</button>
-<button onclick="document.getElementById('hqImportFile').click()">Import backup</button>
-<input id="hqImportFile" type="file" accept=".json,application/json" hidden onchange="hqImport(this)">
-<button onclick="hqSafetyOpen()">History &amp; backups</button>
-</div><div class="note" id="hqBackupStatus" role="status">Checking cloud backups…</div>
+</head><body><div class="app">
+<aside class="side"><div class="brand" id="brandMark">HD <span>EVENTS</span></div><div class="subtitle">BUSINESS HQ</div><nav id="nav" aria-label="Sections"></nav></aside>
+<main class="main">
+<div class="top">
+  <div><div class="eyebrow">Business control centre</div><h1 id="heading">Overview</h1><p id="description"></p></div>
+  <div class="top-right">
+    <span class="chip" id="syncState" role="status">All changes saved</span>
+    <button class="chip" id="hqBackupStatus" onclick="hqSafetyOpen()" title="History, backups, export and import">Checking backups…</button>
+    <a class="chip" href="/cdn-cgi/access/logout">Sign out</a>
+  </div>
 </div>
+<div id="content"></div>
+<div class="footer">Records are saved to the shared cloud workspace with change history and daily backups.</div>
+</main></div>
+<input id="hqImportFile" type="file" accept=".json,application/json" hidden onchange="hqImport(this)">
 </body></html>

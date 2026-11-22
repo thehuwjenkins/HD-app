@@ -4,13 +4,13 @@ One D1 table per kind of record:
 
 | App name | Table | Searchable columns (generated from the record) |
 |---|---|---|
-| jobs | `jobs` | title, booking, start_at, end_at, client_id, staff_id |
+| jobs | `jobs` | title, stage, booking, start_at, end_at, client_id, staff_id |
 | inventory | `inventory` | name (unique, case-insensitive), category |
 | clients | `clients` | name, email |
 | staff | `staff` | name, email |
 | quotes | `quotes` | job_id |
 | packages | `packages` | name |
-| tasks | `tasks` | done |
+| tasks | `tasks` | done, due |
 | projects | `projects` | name |
 | crewInvites | `crew_invites` | job_id, staff_id |
 | crossHires | `cross_hires` | item |
@@ -49,3 +49,29 @@ Records hold only the `/files/...` address. Files are named by their contents an
 ## Legacy
 The old `workspace` row is left exactly as it was before the upgrade, as a fallback. It is no longer read once the
 `meta.migrated` flag is set.
+
+## Job pipeline (Phase 3)
+Each job has a `stage`. The stage decides `booking`, the stock reservation used by the shortage checker:
+
+| Stage | Label | Reserves stock (`booking`) |
+|---|---|---|
+| `enquiry` | Enquiry | Draft (no) |
+| `quote` | Quote sent | Draft (no) |
+| `booked` | Booked | Reserved (yes) |
+| `out` | Out on hire | Reserved (yes) |
+| `returned` | Returned | Returned (released) |
+| `invoiced` | Invoiced | Returned (released) |
+
+The server refuses a job whose `stage` and `booking` disagree. Jobs saved before the pipeline have no `stage`:
+the app and the `stage` column treat Draft as Enquiry, Reserved as Booked and Returned as Returned. Nothing is
+rewritten until the job is next edited.
+
+Enquiries and quotes may have no dates or kit. Booking a job requires both, and is refused if any item would
+be short.
+
+Tasks may have a `due` date (`YYYY-MM-DD`).
+
+## Planned for Phase 4
+The event planner will attach a checklist to a job (`plans` table, one plan per job, items with status, owner,
+deadline, notes and files). Plan deadlines will appear on the calendar, and the equipment-booking step will
+use the stages above.

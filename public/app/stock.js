@@ -1,4 +1,11 @@
 // Stock checks, shared by the server (every save is checked here) and the owner page.
+// Job pipeline. Each stage decides whether the job holds stock (the `booking` the shortage checker uses).
+export const STAGES=['enquiry','quote','booked','out','returned','invoiced'];
+export const STAGE_LABELS={enquiry:'Enquiry',quote:'Quote sent',booked:'Booked',out:'Out on hire',returned:'Returned',invoiced:'Invoiced'};
+export const STAGE_BOOKING={enquiry:'Draft',quote:'Draft',booked:'Reserved',out:'Reserved',returned:'Returned',invoiced:'Returned'};
+// Jobs saved before the pipeline existed have only `booking`.
+export function stageOf(job){return STAGES.includes(job?.stage)?job.stage:({Reserved:'booked',Returned:'returned'})[job?.booking]||'enquiry';}
+
 // Legacy day-only jobs occupy the full return day. New jobs use local depot times.
 export function bounds(job) {
   const stamp = (s, end) => {
@@ -49,6 +56,7 @@ export function validate(state) {
   }
   for(const job of state.jobs){
     if(!['Draft','Reserved','Returned'].includes(job.booking)||!Array.isArray(job.kit)) throw Error('Invalid booking');
+    if(job.stage!==undefined&&(!STAGES.includes(job.stage)||STAGE_BOOKING[job.stage]!==job.booking)) throw Error(String(job.title)+' — stage and stock reservation do not match');
     for(const line of job.kit) if(!Number.isSafeInteger(line.qty)||line.qty<1||typeof line.item!=='string')throw Error('Invalid equipment line');
     if(job.booking!=='Reserved') continue;
     const [start,end]=bounds(job);
@@ -58,4 +66,4 @@ export function validate(state) {
   }
 }
 // Shared with the browser: the owner page loads this file as a module and uses the same checks.
-if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate});
+if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf});

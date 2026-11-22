@@ -28,6 +28,8 @@ Builds on the existing Cloudflare-hosted app (owner dashboard, crew portal, stoc
 - Split the large owner page into smaller pieces.
 
 ## Phase 3: Dashboard redesign
+**Status: built and tested locally (22 Nov 2026). Not yet deployed: deploys with Phases 1 and 2 (`DEPLOY.md`).**
+
 - Job pipeline: enquiry, quote, booked, out, returned, invoiced.
 - Calendar view of jobs, crew and kit.
 - Overview cards: this week's jobs, shortages, tasks due, outstanding quotes.

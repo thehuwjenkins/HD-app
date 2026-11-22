@@ -26,19 +26,13 @@ let activeClient = null;
 let editingJob = null;
 let draftKit = [];
 let tab = "Overview";
-const tabs = [
-  ["Overview", "◫"],
-  ["My Workday", "☑"],
-  ["Projects", "▣"],
-  ["CRM", "♙"],
-  ["Staff", "♟"],
-  ["Crew Portal", "☷"],
-  ["Packages", "▣"],
-  ["Cross-hire", "⚠"],
-  ["Jobs", "▦"],
-  ["Inventory", "▤"],
-  ["Branding", "◈"],
+// Navigation, grouped. [name, icon]
+const navGroups = [
+  ["Work", [["Overview", "◫"], ["Pipeline", "⇶"], ["Calendar", "▦"], ["Jobs", "▤"], ["My Workday", "☑"]]],
+  ["Resources", [["Inventory", "▣"], ["Packages", "◰"], ["Cross-hire", "⚠"], ["Staff", "♟"], ["Crew Portal", "☷"]]],
+  ["Business", [["CRM", "♙"], ["Projects", "◇"], ["Branding", "◈"]]],
 ];
+const tabs = navGroups.flatMap(([, items]) => items);
 const $ = (id) => document.getElementById(id);
 const esc = (x) =>
   String(x ?? "").replace(
@@ -55,41 +49,45 @@ function go(name) {
   tab = name;
   render();
 }
+const pages = {
+  Overview: ["A clear picture of the business and the one thing to do next.", () => overview()],
+  Pipeline: ["Every job from first enquiry to invoice. Move a job along as it progresses.", () => pipeline()],
+  Calendar: ["Jobs, crew and kit by day.", () => calendar()],
+  Jobs: ["Create jobs, build the kit list and quote.", () => jobs()],
+  "My Workday": ["Keep the next action visible. Tick things off as you go.", () => workday()],
+  Inventory: ["Track stock and spot overlapping booking shortages.", () => inventory()],
+  Packages: ["Reusable equipment bundles.", () => packages()],
+  "Cross-hire": ["Kit you are short of, and what you plan to hire in.", () => crossHire()],
+  Staff: ["Crew and freelancers.", () => staff()],
+  "Crew Portal": ["Preview what each crew member sees.", () => crewPortal()],
+  CRM: ["Customer records, linked jobs and quotes.", () => crm()],
+  Projects: ["Business and event development projects.", () => projects()],
+  Branding: ["Company details and logo for quotes and job sheets.", () => branding()],
+};
 function render() {
   updateBrandMark();
-  renderTurnover();
-  $("nav").innerHTML = tabs
+  const shortCount = allShortages().length;
+  $("nav").innerHTML = navGroups
     .map(
-      ([n, i]) =>
-        `<button data-icon="${i}" class="nav ${n === tab ? "active" : ""}" onclick="go('${n}')">${n}</button>`,
+      ([group, items]) =>
+        `<div class="nav-group">${group}</div>` +
+        items
+          .map(
+            ([n, i]) =>
+              `<button class="nav ${n === tab ? "active" : ""}" ${n === tab ? 'aria-current="page"' : ""} onclick="go('${n}')"><span class="ico" aria-hidden="true">${i}</span>${n}${n === "Cross-hire" && shortCount ? `<span class="count">${shortCount}</span>` : ""}</button>`,
+          )
+          .join(""),
     )
     .join("");
+  const [description, view] = pages[tab] || pages.Overview;
   $("heading").textContent = tab;
-  $("description").textContent = {
-    Overview: "A clear picture of your business and your next actions.",
-    "My Workday": "Keep the next action visible. Tick things off as you go.",
-    Projects: "Your business and event development projects.",
-    CRM: "Customer records, linked jobs and quotes.",
-    Staff: "Manage crew and job assignments.",
-    "Crew Portal": "Review the schedule visible to each crew member.",
-    Packages: "Create reusable equipment bundles.",
-    "Cross-hire": "Track shortages and proposed external hires.",
-    Jobs: "Book jobs and reserve equipment by date.",
-    Inventory: "Track stock and spot overlapping booking shortages.",
-  }[tab];
-  $("content").innerHTML = {
-    Overview: overview,
-    "My Workday": workday,
-    Projects: projects,
-    CRM: crm,
-    Staff: staff,
-    "Crew Portal": crewPortal,
-    Packages: packages,
-    "Cross-hire": crossHire,
-    Jobs: jobs,
-    Inventory: inventory,
-    Branding: branding,
-  }[tab]();
+  $("description").textContent = description;
+  $("content").innerHTML = view();
+}
+// Coloured label for a job's pipeline stage.
+function stageTag(job) {
+  const st = stageOf(job);
+  return `<span class="stage" data-stage="${st}">${STAGE_LABELS[st]}</span>`;
 }
 const cats = ["Audio", "Visual", "Lighting", "Stage & Rigging", "Transport", "Install", "Labour / Crew"];
 const money = (n) => "£" + (Number(n) || 0).toFixed(2);

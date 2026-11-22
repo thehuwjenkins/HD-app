@@ -76,7 +76,7 @@ function save() {
     })
     .finally(() => {
       pending--;
-      if (!pending && !failed) $("syncState").textContent = "Saved";
+      if (!pending && !failed) $("syncState").textContent = "All changes saved";
     });
 }
 

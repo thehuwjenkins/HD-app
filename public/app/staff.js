@@ -33,7 +33,7 @@ function crewPortal() {
         ? assigned
             .map(
               (j) =>
-                `<div class="jobcard"><b>${esc(j.title)}</b> <span class="tag">${esc(j.booking)}</span><p>${esc(j.start)} to ${esc(j.end)} · ${esc(j.venue || "Venue not set")}</p><p class="muted">${esc(j.load || "Schedule not set")}</p><p class="muted">${esc(j.notes || "")}</p><button class="btn secondary" onclick="printJob(${j.id})">Print prep sheet</button></div>`,
+                `<div class="jobcard"><b>${esc(j.title)}</b> ${stageTag(j)}<p>${esc(fmtRange(j))} · ${esc(j.venue || "Venue not set")}</p><p class="muted">${esc(j.load || "Schedule not set")}</p><p class="muted">${esc(j.notes || "")}</p><button class="btn secondary" onclick="printJob(${j.id})">Print prep sheet</button></div>`,
             )
             .join("") || '<p class="empty">No assigned jobs.</p>'
         : '<p class="empty">Choose a crew member to preview their schedule.</p>'),
