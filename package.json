@@ -1,0 +1,8 @@
+{
+  "name": "hd-events-hq",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --no-warnings --import ./test/register.js --test test/*.test.js"
+  }
+}

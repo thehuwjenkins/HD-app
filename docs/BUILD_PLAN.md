@@ -9,6 +9,8 @@ Builds on the existing Cloudflare-hosted app (owner dashboard, crew portal, stoc
 - Plain, clear dashboard: one obvious next action per screen.
 
 ## Phase 1: Backup and safety layer
+**Status: built and tested locally (22 Nov 2026). Waiting on deploy: see `PHASE1_SETUP.md`, then the restore drill in `RESTORE.md`.**
+
 1. Automatic daily backups to a separate location, keeping at least 30 days of copies.
 2. Tested restore: documented, rehearsed on a copy before it is ever needed.
 3. Version history: keep the last several saved versions of the workspace for rollback.

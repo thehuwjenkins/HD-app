@@ -1,0 +1,42 @@
+# Security review: Phase 1 (22 Nov 2026)
+
+Scope: `access.js`, `worker.js`, `stock.js`, `owner.html` as uploaded, plus the Phase 1 changes.
+
+## Sign-in (Cloudflare Access): good
+- Every request must carry a Cloudflare Access token. `access.js` checks the RS256 signature against keys
+  fetched only from the configured team domain, plus issuer, audience, expiry, not-before and email.
+  It rejects unknown key IDs and other algorithms.
+- Because the worker checks the token itself, reaching the worker by a route that skips Access
+  (such as `*.workers.dev`) still returns 403. **Recommended:** turn off the `workers.dev` route anyway.
+- Staff only see a cut-down crew page with *their own* assigned jobs, built server-side with escaping.
+  They never receive the workspace data.
+
+## Owner-only editing: good
+- Only `OWNER_EMAIL` can save, and only from the app's own origin, with a JSON body (blocks cross-site forms).
+- The new `/api/safety/*` endpoints (history, audit log, backups, restore) are owner-only. The ones that
+  change data also require the same-origin JSON check. Tests cover staff, other-site and no-token requests.
+- Saves are guarded by a revision number, so two devices cannot silently overwrite each other.
+- **Open question:** anyone else who needs edit rights currently has to share the owner email. A proper
+  editor/viewer role list is a small change once the people are decided.
+
+## Secrets: none in page code
+- `owner.html` contains no keys or tokens. `ACCESS_AUD` and `ACCESS_TEAM` are identifiers, not secrets.
+- The optional `ALERT_WEBHOOK` must be set with `wrangler secret put`, never in `[vars]` or the code.
+
+## Fixed in this phase
+- **Content-Security-Policy added**: blocks the app being framed, plugin content, `<base>` hijacking and
+  form posts to other sites. Inline scripts are still allowed because the page relies on them. Tightening
+  that is part of the Phase 2 page split.
+- **Cross-hire button**: an equipment or job name containing an apostrophe (such as "O'Neill's Party") broke
+  out of the button's script and could run code. Now encoded.
+- **Logo image source** is now escaped on printed quotes and job sheets.
+- **Footer** no longer says records are stored in this browser only. That was wrong: they are in the cloud.
+
+## Notes for later phases
+- The default logo (about 200 KB) is embedded in both `owner.html` and the saved workspace, which uses up the
+  1.8 MB limit. Phase 2 moves it to file storage.
+- Data entered by the owner is rendered with `innerHTML` throughout, escaped with `esc()`. Escaping looks
+  consistent, but there are many call sites. The Phase 2 split should move to a templating approach that
+  escapes by default.
+- Backups contain all customer and staff data. The R2 bucket is private by default: do not enable public
+  access or an `r2.dev` URL on it.
