@@ -34,9 +34,28 @@ Scope: `access.js`, `worker.js`, `stock.js`, `owner.html` as uploaded, plus the 
 
 ## Notes for later phases
 - The default logo (about 200 KB) is embedded in both `owner.html` and the saved workspace, which uses up the
-  1.8 MB limit. Phase 2 moves it to file storage.
+  1.8 MB limit. Phase 2 moves it to file storage. **Done in Phase 2.**
 - Data entered by the owner is rendered with `innerHTML` throughout, escaped with `esc()`. Escaping looks
   consistent, but there are many call sites. The Phase 2 split should move to a templating approach that
   escapes by default.
 - Backups contain all customer and staff data. The R2 bucket is private by default: do not enable public
   access or an `r2.dev` URL on it.
+
+# Security review: Phase 2 (22 Nov 2026)
+
+Edit rights confirmed: **only the owner (`OWNER_EMAIL`) can edit**. Everyone else signed in through Access is
+treated as crew.
+
+- **All requests still pass the Access check in the worker first**, including app code, styles and the logo
+  (`run_worker_first = true`). App code holds no business data, so any signed-in person may load it.
+- **Owner-only:** saves (`/api/changes`), the upgrade, uploads, history, backups, undo, import and restore. Writes
+  also require the same-origin check. Tests cover crew, other-site and no-token requests for every endpoint.
+- **Saves are checked on the server**: collection names, record IDs, versions and shapes are validated before
+  any SQL is built, table names come from a fixed list, and all values are bound parameters. The full stock
+  check runs on every save.
+- **Uploads:** PNG, JPEG, WebP, GIF or SVG only, 5 MB maximum, named by content hash (no user-chosen paths).
+  Served files carry a `sandbox` Content-Security-Policy, so an uploaded SVG cannot run script even if
+  opened directly.
+- **Crew page** now reads only from the tables and still shows each person only their own assigned jobs.
+- **Old pages** left open in a browser get a clear "reload" message (410) instead of being able to overwrite
+  the new storage.

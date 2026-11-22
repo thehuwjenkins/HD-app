@@ -9,7 +9,7 @@ Builds on the existing Cloudflare-hosted app (owner dashboard, crew portal, stoc
 - Plain, clear dashboard: one obvious next action per screen.
 
 ## Phase 1: Backup and safety layer
-**Status: built and tested locally (22 Nov 2026). Waiting on deploy: see `PHASE1_SETUP.md`, then the restore drill in `RESTORE.md`.**
+**Status: built and tested locally (22 Nov 2026). Not yet deployed: see `DEPLOY.md`.**
 
 1. Automatic daily backups to a separate location, keeping at least 30 days of copies.
 2. Tested restore: documented, rehearsed on a copy before it is ever needed.
@@ -19,6 +19,8 @@ Builds on the existing Cloudflare-hosted app (owner dashboard, crew portal, stoc
 6. Security review: staff sign-in rules, owner-only editing, no secrets in page code.
 
 ## Phase 2: Database restructure for scale
+**Status: built and tested locally (22 Nov 2026). Not yet deployed: see `DEPLOY.md` (deploys together with Phase 1). Details in `DATA_MODEL.md`.**
+
 - Move from one saved record (capped near 1.8 MB) to tables: jobs, inventory, clients, staff, quotes, packages, tasks, cross-hires.
 - Save only the record that changed.
 - Equipment photos and logos in file storage, not inside the data.
@@ -61,7 +63,7 @@ AI-assisted drafting of risk assessments, method statements and H&S plan, always
 3. Phase 2, then Phase 3, with Phase 4 designed alongside so the data model fits.
 
 ## Open questions
-- Backup location: Google Drive, Cloudflare storage (R2), or both?
-- Who besides Huw needs edit rights; who is view-only?
+- Backup location: Cloudflare R2 for now (default); Google Drive copy optional later.
+- ~~Who besides Huw needs edit rights?~~ Decided: only Huw edits.
 - Which past events become the first planner templates?
 - Who is the competent person signing off H&S documents?

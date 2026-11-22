@@ -1,3 +1,4 @@
+// Stock checks, shared by the server (every save is checked here) and the owner page.
 // Legacy day-only jobs occupy the full return day. New jobs use local depot times.
 export function bounds(job) {
   const stamp = (s, end) => {
@@ -56,3 +57,5 @@ export function validate(state) {
     if(issue)throw Error(job.title+' — '+issue.name+' short by '+issue.short+(issue.conflicts.length?' (overlaps '+issue.conflicts.join(', ')+')':''));
   }
 }
+// Shared with the browser: the owner page loads this file as a module and uses the same checks.
+if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate});

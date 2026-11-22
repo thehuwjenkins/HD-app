@@ -1,18 +1,21 @@
-# Example Wrangler config for HD Events HQ with the Phase 1 safety layer.
-# Your live config was not uploaded, so merge the marked NEW sections into it
+# Example Wrangler config for HD Events HQ (Phases 1 and 2).
+# Your live config was not uploaded, so merge the marked NEW / CHANGED parts into it
 # rather than replacing it. Keep your existing name, account and database IDs.
 
 name = "hd-events-hq"                 # your existing worker name
-main = "worker.js"
+main = "src/worker.js"                # CHANGED: the code now lives in src/
 compatibility_date = "2025-10-01"     # keep your existing date
 
-# owner.html and logo.txt are imported as text (Wrangler's default rule for .html/.txt).
+# NEW: browser code, styles and the logo, served from public/ after the sign-in check.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true               # every request passes the Access check in the worker first
 
 [vars]
 ACCESS_TEAM = "your-team"             # existing
 ACCESS_AUD = "your-access-aud-tag"    # existing
-OWNER_EMAIL = "owner@example.com"     # existing
-VERSIONS_KEEP = "50"                  # NEW (optional): saved versions to keep, 5–500
+OWNER_EMAIL = "owner@example.com"     # existing: the only person who can edit
 
 [[d1_databases]]                      # existing
 binding = "DB"
@@ -20,12 +23,16 @@ database_name = "hd-events-hq"
 database_id = "00000000-0000-0000-0000-000000000000"
 migrations_dir = "migrations"         # NEW
 
-[[r2_buckets]]                        # NEW: where daily backups are stored
+[[r2_buckets]]                        # NEW: daily backups
 binding = "BACKUPS"
 bucket_name = "hd-events-hq-backups"
+
+[[r2_buckets]]                        # NEW: equipment photos and logos
+binding = "FILES"
+bucket_name = "hd-events-hq-files"
 
 [triggers]                            # NEW: daily backup at 02:17 UTC
 crons = ["17 2 * * *"]
 
-# Optional secret for failure alerts (an ntfy / Slack / Discord webhook URL):
+# Optional secret for backup failure alerts (an ntfy / Slack / Discord webhook URL):
 #   npx wrangler secret put ALERT_WEBHOOK

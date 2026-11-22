@@ -2,19 +2,28 @@
 
 Cloudflare Worker app: owner dashboard, crew portal, stock and shortage checker, CRM, packages, cross-hire.
 
-| File | Purpose |
+## Layout
+| Path | Purpose |
 |---|---|
-| `worker.js` | Request routing, owner/crew pages, daily backup schedule |
-| `access.js` | Cloudflare Access sign-in check |
-| `stock.js` | Workspace validation and shortage calculation |
-| `safety.js` | Version history, audit log, cloud backups, restore (Phase 1) |
-| `owner.html` | Owner dashboard (single page) |
-| `logo.txt` | Logo as a data URL for the crew page |
+| `src/worker.js` | Request routing, sign-in check, daily backup schedule |
+| `src/access.js` | Cloudflare Access sign-in check |
+| `src/store.js` | Table storage: per-record saves, history, undo |
+| `src/safety.js` | Backups, restore, audit log, backup status |
+| `src/migrate.js` | One-off move from the old single record to tables |
+| `src/files.js` | Photo and logo storage (R2) |
+| `src/pages.js` | Crew page and upgrade screen |
+| `src/owner.html` | Owner page shell |
+| `public/app/` | Owner app in the browser, one file per area (jobs, inventory, CRM, …) |
+| `public/app/stock.js` | Stock checks, shared by server and browser |
 | `migrations/` | D1 database schema |
 
-- Build plan: `docs/BUILD_PLAN.md`
-- Phase 1 setup: `docs/PHASE1_SETUP.md`
-- Restoring data: `docs/RESTORE.md`
-- Security review: `docs/SECURITY_REVIEW.md`
+## Docs
+- `docs/BUILD_PLAN.md`: the plan and status
+- `docs/DEPLOY.md`: how to deploy (Phases 1 and 2)
+- `docs/RESTORE.md`: getting data back, and the restore drill
+- `docs/DATA_MODEL.md`: tables, saving and history
+- `docs/SECURITY_REVIEW.md`: security review
 
-Run the tests with `npm test` (Node 22+, no dependencies).
+## Tests
+`npm test` (Node 22+, no dependencies). Covers the upgrade, per-record saves and conflicts, undo, backups,
+restore, uploads and access rules, against a real SQLite database and signed Access tokens.
