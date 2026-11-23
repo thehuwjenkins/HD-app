@@ -3,13 +3,14 @@ import {applyChanges,undoTo,replaceAll,isMigrated,loadState,currentState,legacyS
 import {listAudit,restoreBackup,runBackup,listBackups,status,counts,BACKUP_KEY} from './safety.js';
 import {storeFile,serveFile,MAX_FILE} from './files.js';
 import {migrate} from './migrate.js';
+import {generateImage} from './ai.js';
 import {crewPage,upgradePage} from './pages.js';
 import template from './owner.html';
 
 const headers={'cache-control':'private, no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','x-frame-options':'DENY','strict-transport-security':'max-age=31536000',
   // The owner page uses inline event handlers, so script-src is left open; these directives block framing, plugins, <base> hijacking and off-site form posts.
   'content-security-policy':"frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'"};
-function reply(body,status=200,type='text/plain;charset=utf-8'){return new Response(body,{status,headers:{...headers,'content-type':type}});}
+function reply(body,status=200,type='text/plain;charset=utf-8',extra={}){return new Response(body,{status,headers:{...headers,'content-type':type,...extra}});}
 const json=(value,status=200)=>reply(JSON.stringify(value),status,'application/json');
 const html=body=>reply(body,200,'text/html;charset=utf-8');
 
@@ -53,11 +54,15 @@ async function api(req,env,url,email,owner){
   if(method==='PUT'&&path==='/api/workspace')return reply('HD Events HQ has been updated. Reload the page; your last change was not saved.',410);
   if(method==='POST'&&path==='/api/files'){
     const type=req.headers.get('content-type')||'';
-    const denied=writeCheck(req,url,owner,'image/');if(denied)return denied;
-    if(Number(req.headers.get('content-length'))>MAX_FILE)return reply('Images must be under 5 MB.',413);
+    const denied=writeCheck(req,url,owner,'');if(denied)return denied;
+    if(Number(req.headers.get('content-length'))>MAX_FILE)return reply('Files must be under 25 MB.',413);
     return guarded(async()=>json({url:await storeFile(env,url.searchParams.get('kind')||'',type.split(';')[0].trim(),await req.arrayBuffer())}));
   }
 
+  if(method==='POST'&&path==='/api/ai/image'){
+    const denied=writeCheck(req,url,owner);if(denied)return denied;
+    return guarded(async()=>{const {prompt}=await readJson(req,10_000);return json({url:await generateImage(env,prompt)});});
+  }
   if(path.startsWith('/api/safety/')){
     const route=method+' '+path.slice(12);
     if(route==='GET status')return json(await status(env));
@@ -108,7 +113,8 @@ async fetch(req,env){
     }
     const {state,versions}=await loadState(env);
     const safe=JSON.stringify({state,versions}).replaceAll('<','\\u003c');
-    return html(template.replace('/*BOOTSTRAP*/null',()=>safe));
+    // Map tile servers (OpenStreetMap) require a referrer; send only the site's origin, never the path.
+    return reply(template.replace('/*BOOTSTRAP*/null',()=>safe),200,'text/html;charset=utf-8',{'referrer-policy':'strict-origin'});
   }
   const state=await currentState(env);
   if(!state)return reply('Workspace setup is incomplete',503);

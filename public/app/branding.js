@@ -22,6 +22,7 @@ function branding() {
       ["email", "Email"],
       ["phone", "Phone"],
       ["website", "Website"],
+      ["approverName", "Approver for safety documents (full name)"],
     ]
       .map(
         ([key, label]) =>

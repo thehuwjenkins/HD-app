@@ -14,6 +14,7 @@ One D1 table per kind of record:
 | projects | `projects` | name |
 | crewInvites | `crew_invites` | job_id, staff_id |
 | crossHires | `cross_hires` | item |
+| plans | `plans` | job_id, title, event_date |
 | company, branding, … | `settings` (one row per key) | – |
 
 Each row stores:
@@ -71,7 +72,17 @@ be short.
 
 Tasks may have a `due` date (`YYYY-MM-DD`).
 
-## Planned for Phase 4
-The event planner will attach a checklist to a job (`plans` table, one plan per job, items with status, owner,
-deadline, notes and files). Plan deadlines will appear on the calendar, and the equipment-booking step will
-use the stages above.
+## Event plans (Phase 4)
+One `plans` record per event, linked to its job by `jobId`:
+- `stages`: the 11 checklist stages, each with items `{title, status (todo|doing|done|na), owner, due, notes, files[], link?, doc?}`
+- `doc` (safety documents): `{kind (ra|fra|ms|hs|other), content, status (draft|approved), approval?}`
+- `site`: `{address, center, zoom, features[]}`. Features are pins `{kind, label, at}` or shapes `{kind, label, points}`.
+- `creative`: `{theme, vibe, audience, palette[], notes, images[]}`, where images are uploaded or AI-generated (`/files/creative/...`)
+- `posters[]`: poster designs (text, layout, colours, background image); `exported` is the saved PNG
+
+**Approval rule (checked by the server on every save):** a document can only be `approved` with an approval that
+names the approver, gives a time, and carries a fingerprint of the exact approved text. If the text changes, the
+fingerprint no longer matches and the save is refused unless the document goes back to `draft`. An approved
+document therefore always matches what was signed off.
+
+Plan deadlines appear on the calendar.

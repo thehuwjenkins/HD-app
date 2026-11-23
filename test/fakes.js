@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 
 export function makeD1() {
   const db = new DatabaseSync(':memory:');
-  for (const f of ['0001_workspace.sql', '0002_safety_layer.sql', '0003_tables.sql', '0004_pipeline.sql']) db.exec(readFileSync(new URL('../migrations/' + f, import.meta.url), 'utf8'));
+  for (const f of ['0001_workspace.sql', '0002_safety_layer.sql', '0003_tables.sql', '0004_pipeline.sql', '0005_planner.sql']) db.exec(readFileSync(new URL('../migrations/' + f, import.meta.url), 'utf8'));
   const stmt = (sql, params = []) => ({
     sql, params,
     bind: (...p) => stmt(sql, p),
@@ -44,7 +44,7 @@ export function makeR2() {
   };
 }
 
-export const emptyState = () => ({jobs: [], inventory: [], staff: [], clients: [], tasks: [], projects: [], packages: [], crewInvites: [], crossHires: [], quotes: []});
+export const emptyState = () => ({jobs: [], inventory: [], staff: [], clients: [], tasks: [], projects: [], packages: [], crewInvites: [], crossHires: [], quotes: [], plans: []});
 export function sampleState() {
   const s = emptyState();
   s.inventory.push({id: 1, name: 'Nexo PS10', qty: 4, service: 0}, {id: 2, name: 'XLR 10m', qty: 40, service: 2});

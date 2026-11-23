@@ -12,15 +12,17 @@ Cloudflare Worker app: owner dashboard, crew portal, stock and shortage checker,
 | `src/migrate.js` | One-off move from the old single record to tables |
 | `src/files.js` | Photo and logo storage (R2) |
 | `src/pages.js` | Crew page and upgrade screen |
+| `src/ai.js` | AI image generation (Cloudflare Workers AI) |
 | `src/owner.html` | Owner page shell |
 | `public/app/` | Owner app in the browser, one file per area: overview, pipeline, calendar, jobs, inventory, CRM, … |
+| `public/app/planner*.js`, `sitemap.js`, `creative.js` | Event planner: checklist and documents, site map, creative board and poster studio |
 | `public/app/styles.css` | Styles, with colour and spacing tokens at the top |
 | `public/app/stock.js` | Stock checks, shared by server and browser |
 | `migrations/` | D1 database schema |
 
 ## Docs
 - `docs/BUILD_PLAN.md`: the plan and status
-- `docs/DEPLOY.md`: how to deploy (Phases 1 to 3)
+- `docs/DEPLOY.md`: how to deploy (Phases 1 to 4)
 - `docs/RESTORE.md`: getting data back, and the restore drill
 - `docs/DATA_MODEL.md`: tables, saving and history
 - `docs/SECURITY_REVIEW.md`: security review

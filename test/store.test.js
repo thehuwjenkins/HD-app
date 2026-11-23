@@ -177,3 +177,14 @@ test('replaceAll writes only differences and records an audit entry', async () =
   await replaceAll(env, OWNER, emptyState());
   assert.deepEqual(counts((await loadState(env)).state), counts(emptyState()));
 });
+
+test('a workspace saved before the planner existed (no plans list) upgrades cleanly', async () => {
+  const s = sampleState();
+  delete s.plans;
+  const env = {DB: makeD1(), BACKUPS: makeR2(), FILES: makeR2()};
+  seedLegacy(env, s);
+  const r = await migrate(env, OWNER);
+  assert.equal(r.ok, true, r.error);
+  assert.equal(r.after.plans, 0);
+  assert.deepEqual((await loadState(env)).state.plans, []);
+});

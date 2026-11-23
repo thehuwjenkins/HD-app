@@ -3,7 +3,7 @@
 import {validate} from '../public/app/stock.js';
 
 // App collection name -> table name.
-export const TABLES={jobs:'jobs',inventory:'inventory',staff:'staff',clients:'clients',tasks:'tasks',projects:'projects',packages:'packages',crewInvites:'crew_invites',crossHires:'cross_hires',quotes:'quotes'};
+export const TABLES={jobs:'jobs',inventory:'inventory',staff:'staff',clients:'clients',tasks:'tasks',projects:'projects',packages:'packages',crewInvites:'crew_invites',crossHires:'cross_hires',quotes:'quotes',plans:'plans'};
 export const COLLECTIONS=Object.keys(TABLES);
 const SETTINGS='settings';
 const SETTING_KEY=/^[A-Za-z][A-Za-z0-9_]{0,40}$/;
@@ -156,7 +156,7 @@ export async function replaceAll(env,email,next,extra={}){
   const desired={};
   for(const c of COLLECTIONS){
     for(const r of state[c])desired[c+':'+r.id]=null;
-    for(const r of next[c])desired[c+':'+r.id]=r;
+    for(const r of next[c]||[])desired[c+':'+r.id]=r;
   }
   for(const k of Object.keys(state))if(!COLLECTIONS.includes(k))desired[SETTINGS+':'+k]=null;
   for(const k of Object.keys(next))if(!COLLECTIONS.includes(k)&&SETTING_KEY.test(k))desired[SETTINGS+':'+k]=next[k];

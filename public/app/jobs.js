@@ -73,7 +73,7 @@ function jobList() {
     .map((j) => {
       const issues = jobShortages(j);
       const items = (j.kit || []).reduce((n, k) => n + Number(k.qty), 0);
-      return `<div class="jobcard"><div class="head"><div><b>${esc(j.title)}</b><div class="muted">${esc(j.client || "No client")} · ${esc(fmtRange(j))}</div></div>${stageTag(j)}</div><p class="muted">${(j.kit || []).length} equipment types · ${items} items · ${money(jobValue(j))}${issues.length ? ` · <span class="tag warning">${issues.length} shortage(s)</span>` : ""}</p><div class="jobactions"><button class="btn small" onclick="editJob(${j.id})">Edit</button><button class="btn small secondary" onclick="printJob(${j.id})">Job sheet</button><button class="btn small secondary" onclick="printQuote(${j.id})">Client quote</button><button class="btn small secondary" onclick="crewInviteEditor(${j.id})">Crew</button><button class="btn small secondary" onclick="duplicateJob(${j.id})">Duplicate</button><button class="btn small danger" onclick="deleteJob(${j.id})">Delete</button></div></div>`;
+      return `<div class="jobcard"><div class="head"><div><b>${esc(j.title)}</b><div class="muted">${esc(j.client || "No client")} · ${esc(fmtRange(j))}</div></div>${stageTag(j)}</div><p class="muted">${(j.kit || []).length} equipment types · ${items} items · ${money(jobValue(j))}${issues.length ? ` · <span class="tag warning">${issues.length} shortage(s)</span>` : ""}</p><div class="jobactions"><button class="btn small" onclick="editJob(${j.id})">Edit</button>${(() => { const pl = db.plans.find((x) => x.jobId === j.id); return pl ? `<button class="btn small secondary" onclick="openPlan(${pl.id})">✦ Plan</button>` : `<button class="btn small secondary" onclick="planDialog(${j.id})">✦ Plan event</button>`; })()}<button class="btn small secondary" onclick="printJob(${j.id})">Job sheet</button><button class="btn small secondary" onclick="printQuote(${j.id})">Client quote</button><button class="btn small secondary" onclick="crewInviteEditor(${j.id})">Crew</button><button class="btn small secondary" onclick="duplicateJob(${j.id})">Duplicate</button><button class="btn small danger" onclick="deleteJob(${j.id})">Delete</button></div></div>`;
     })
     .join("");
 }
@@ -160,7 +160,9 @@ function allShortages() {
   );
 }
 function deleteJob(id) {
-  if (!confirm("Delete this job? You can undo this from History & backups.")) return;
+  const plan = db.plans.find((p) => p.jobId === id);
+  if (!confirm("Delete this job?" + (plan ? " Its event plan “" + plan.title + "” will be deleted too." : "") + " You can undo this from History & backups.")) return;
+  if (plan) db.plans = db.plans.filter((p) => p !== plan);
   db.jobs = db.jobs.filter((j) => j.id !== id);
   if (editingJob === id) {
     editingJob = null;

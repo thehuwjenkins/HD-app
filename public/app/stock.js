@@ -39,7 +39,46 @@ export function shortages(job, state) {
   }
   return issues;
 }
+// Short fingerprint of a document's text. An approval stores the fingerprint of the exact text approved,
+// so any later edit is detectable and the approval no longer applies.
+export function fingerprint(text){
+  let h1=0xdeadbeef,h2=0x41c6ce57;
+  for(let i=0;i<text.length;i++){const c=text.charCodeAt(i);h1=Math.imul(h1^c,2654435761);h2=Math.imul(h2^c,1597334677);}
+  h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);
+  h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);
+  return (4294967296*(2097151&h2)+(h1>>>0)).toString(36);
+}
+export const PLAN_STATUSES=['todo','doing','done','na'];
+export const DOC_KINDS=['ra','fra','ms','hs','other'];
+// Event plans: checklist shape, and safety documents can only be "approved" with a named approver
+// and an approval that matches the current text.
+function validatePlans(plans){
+  if(plans===undefined)return;
+  if(!Array.isArray(plans))throw Error('Missing plans');
+  const ids=new Set();
+  for(const p of plans){
+    if(!Number.isSafeInteger(p.id)||ids.has(p.id))throw Error('Invalid or duplicate ID in plans');
+    ids.add(p.id);
+    if(typeof p.title!=='string'||!p.title.trim())throw Error('An event plan needs a name');
+    if(!Array.isArray(p.stages))throw Error(p.title+' — checklist missing');
+    for(const st of p.stages){
+      if(!Array.isArray(st.items))throw Error(p.title+' — checklist stage missing items');
+      for(const it of st.items){
+        if(!PLAN_STATUSES.includes(it.status))throw Error(p.title+' — invalid checklist status');
+        const d=it.doc;
+        if(!d)continue;
+        if(!DOC_KINDS.includes(d.kind)||typeof d.content!=='string')throw Error(p.title+' — invalid document');
+        if(d.status==='approved'){
+          const a=d.approval;
+          if(!a||typeof a.by!=='string'||!a.by.trim()||typeof a.at!=='string')throw Error(it.title+' — approval needs a named approver');
+          if(a.hash!==fingerprint(d.content))throw Error(it.title+' — text changed after approval; it must be approved again');
+        }else if(d.status!=='draft')throw Error(p.title+' — invalid document status');
+      }
+    }
+  }
+}
 export function validate(state) {
+  validatePlans(state.plans);
   for(const key of ['jobs','inventory','staff','clients','tasks','projects','packages','crewInvites','crossHires','quotes']) {
     if(!Array.isArray(state[key])) throw Error('Missing '+key);
     const ids = new Set();
@@ -66,4 +105,4 @@ export function validate(state) {
   }
 }
 // Shared with the browser: the owner page loads this file as a module and uses the same checks.
-if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf});
+if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS});

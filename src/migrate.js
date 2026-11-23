@@ -35,7 +35,7 @@ export async function migrate(env,email){
     const moved=await extractImages(env,state);
     // 3. Clear any half-finished earlier attempt, then insert every record.
     const stmts=[...COLLECTIONS.map(c=>env.DB.prepare(`DELETE FROM ${TABLES[c]}`)),env.DB.prepare('DELETE FROM settings')];
-    for(const c of COLLECTIONS)for(const r of state[c])
+    for(const c of COLLECTIONS)for(const r of state[c]||[])
       stmts.push(env.DB.prepare(`INSERT INTO ${TABLES[c]} (id,version,data,updated_at,updated_by) VALUES (?,1,?,?,?)`).bind(r.id,JSON.stringify(r),at,email));
     for(const k of Object.keys(state))if(!COLLECTIONS.includes(k))
       stmts.push(env.DB.prepare('INSERT INTO settings (key,version,data,updated_at,updated_by) VALUES (?,1,?,?,?)').bind(k,JSON.stringify(state[k]),at,email));
@@ -46,7 +46,7 @@ export async function migrate(env,email){
     const problems=[];
     for(const c of COLLECTIONS){
       if(before[c]!==after[c])problems.push(`${c}: ${before[c]} before, ${after[c]} after`);
-      const want=new Map(state[c].map(r=>[r.id,JSON.stringify(r)]));
+      const want=new Map((state[c]||[]).map(r=>[r.id,JSON.stringify(r)]));
       for(const r of loaded[c])if(want.get(r.id)!==JSON.stringify(r))problems.push(`${c} #${r.id} differs`);
     }
     for(const k of Object.keys(state))if(!COLLECTIONS.includes(k)&&JSON.stringify(state[k])!==JSON.stringify(loaded[k]))problems.push(`setting ${k} differs`);

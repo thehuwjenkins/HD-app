@@ -1,4 +1,4 @@
-# Example Wrangler config for HD Events HQ (Phases 1 and 2).
+# Example Wrangler config for HD Events HQ (Phases 1 to 4).
 # Your live config was not uploaded, so merge the marked NEW / CHANGED parts into it
 # rather than replacing it. Keep your existing name, account and database IDs.
 
@@ -30,6 +30,9 @@ bucket_name = "hd-events-hq-backups"
 [[r2_buckets]]                        # NEW: equipment photos and logos
 binding = "FILES"
 bucket_name = "hd-events-hq-files"
+
+[ai]                                  # NEW (Phase 4): AI images for the event planner, via Cloudflare Workers AI
+binding = "AI"
 
 [triggers]                            # NEW: daily backup at 02:17 UTC
 crons = ["17 2 * * *"]

@@ -1,6 +1,6 @@
-# Deploying Phases 1 to 3
+# Deploying Phases 1 to 4
 
-This switches on backups, history, the new table storage and the redesigned dashboard in one go. Allow about 30 minutes.
+This switches on backups, history, the new table storage, the redesigned dashboard and the event planner in one go. Allow about 30 minutes.
 Run the commands from the project folder with Wrangler signed in to the HD Events Cloudflare account.
 From now on, deploy with Wrangler (`npx wrangler deploy`), not by pasting files into the Cloudflare dashboard:
 the app is now several files plus database migrations.
@@ -30,6 +30,22 @@ Merge the parts marked **NEW** and **CHANGED** in `wrangler.toml.example` into y
 - the `[assets]` section
 - the two R2 buckets
 - the cron trigger
+- the `[ai]` binding (AI images in the event planner)
+
+## AI images
+The event planner's **Generate image** and **Generate artwork** buttons use Cloudflare Workers AI on your
+existing Cloudflare account; nothing else to sign up for. The `[ai]` section in `wrangler.toml` switches it on.
+- Model: FLUX.1 schnell (`@cf/black-forest-labs/flux-1-schnell`). To try another Workers AI image model, set
+  `AI_IMAGE_MODEL` under `[vars]`.
+- Cost: Workers AI includes a daily free allowance, then charges per use. Check the current Workers AI pricing
+  page. A few dozen images a day is typically within or close to the free allowance.
+- Without the `[ai]` section the rest of the planner works; the buttons explain that AI images are off.
+
+## Maps
+The site map uses Esri satellite imagery and OpenStreetMap, which need no key, and address search by Photon
+(OpenStreetMap data). Typing an address sends it to Photon. Each map has an **Open in Google Maps** link. Esri's
+imagery is free for light use with attribution. If the planner becomes heavily used, or you want Google's own
+satellite tiles in the app, that can be switched with a Google Maps API key.
 
 ## 4. (Optional) failure alerts
 ```
@@ -57,7 +73,11 @@ npx wrangler deploy
 
 Crew members keep seeing their jobs throughout.
 
-## 7. Check
+## 7. Set the document approver
+Branding → Company details → **Approver for safety documents**: enter your full name exactly as it should appear
+on approved documents.
+
+## 8. Check
 - The backup box (bottom right) is green.
 - Edit something small, such as ticking a task. Open **History & backups**. It appears under **Recent changes**
   with an **Undo from here** button.

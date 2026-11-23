@@ -26,7 +26,8 @@ function calendar() {
         .map((j) => `<span class="cal-job" data-stage="${stageOf(j)}" title="${esc(j.title)} · ${STAGE_LABELS[stageOf(j)]}">${esc(j.title)}</span>`)
         .join("");
       const cls = [d.slice(0, 7) !== calMonth && "other", d === today && "today", d === calDay && "selected"].filter(Boolean).join(" ");
-      return `<button class="cal-day ${cls}" onclick="calDay='${d}';render()" aria-label="${fmtDay(d, { weekday: "long", day: "numeric", month: "long" })}, ${on.length} job(s)"><span class="num">${Number(d.slice(8))}</span>${bars}${on.length > 3 ? `<span class="cal-more">+${on.length - 3} more</span>` : ""}</button>`;
+      const deadlines = db.plans.reduce((n, p) => n + p.stages.reduce((m, s) => m + s.items.filter((i) => i.due === d && i.status !== "done" && i.status !== "na").length, 0), 0);
+      return `<button class="cal-day ${cls}" onclick="calDay='${d}';render()" aria-label="${fmtDay(d, { weekday: "long", day: "numeric", month: "long" })}, ${on.length} job(s)"><span class="num">${Number(d.slice(8))}${deadlines ? ` <span class="due-dot" title="${deadlines} planner deadline(s)">✦${deadlines}</span>` : ""}</span>${bars}${on.length > 3 ? `<span class="cal-more">+${on.length - 3} more</span>` : ""}</button>`;
     })
     .join("");
   const monthName = fmtDay(first, { month: "long", year: "numeric" });
@@ -80,5 +81,8 @@ function calDayPanel(d, list) {
   const kitHtml = rows
     ? `<div class="tablewrap"><table><thead><tr><th>Equipment</th><th>Reserved</th><th>Pending</th><th>Available to use</th><th></th></tr></thead><tbody>${rows}</tbody></table></div><p class="hint">Reserved = Booked or Out on hire. Pending = enquiries and quotes that would also need it. Counted per day; exact times are checked when a job is booked.</p>`
     : '<p class="empty">No equipment out.</p>';
-  return `<div class="cols">${panel(fmtDay(d, { weekday: "long", day: "numeric", month: "long" }) + (calCrew ? " · " + esc(db.staff.find((m) => String(m.id) === calCrew)?.name || "") : ""), jobsHtml)}${panel("Kit out on this day", kitHtml)}</div>`;
+  // Event planner deadlines falling on this day.
+  const due = db.plans.flatMap((p) => p.stages.flatMap((s) => s.items.filter((i) => i.due === d && i.status !== "done" && i.status !== "na").map((i) => ({ p, i }))));
+  const dueHtml = due.length ? `<h3>Planner deadlines</h3>` + due.map(({ p, i }) => row(`${esc(i.title)}<div class="muted">${esc(p.title)}${i.owner ? " · " + esc(i.owner) : ""}</div>`, `<button class="btn small secondary" onclick="openPlan(${p.id})">Open plan</button>`)).join("") : "";
+  return `<div class="cols">${panel(fmtDay(d, { weekday: "long", day: "numeric", month: "long" }) + (calCrew ? " · " + esc(db.staff.find((m) => String(m.id) === calCrew)?.name || "") : ""), jobsHtml + dueHtml)}${panel("Kit out on this day", kitHtml)}</div>`;
 }

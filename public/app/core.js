@@ -20,6 +20,7 @@ db.crossHires = db.crossHires || [];
 db.quotes = db.quotes || [];
 db.branding = db.branding || { logo: DEFAULT_HD_LOGO };
 db.crewInvites = db.crewInvites || [];
+db.plans = db.plans || [];
 let inventoryView = "grid";
 let inventoryQuery = "";
 let activeClient = null;
@@ -28,7 +29,7 @@ let draftKit = [];
 let tab = "Overview";
 // Navigation, grouped. [name, icon]
 const navGroups = [
-  ["Work", [["Overview", "◫"], ["Pipeline", "⇶"], ["Calendar", "▦"], ["Jobs", "▤"], ["My Workday", "☑"]]],
+  ["Work", [["Overview", "◫"], ["Event Planner", "✦"], ["Pipeline", "⇶"], ["Calendar", "▦"], ["Jobs", "▤"], ["My Workday", "☑"]]],
   ["Resources", [["Inventory", "▣"], ["Packages", "◰"], ["Cross-hire", "⚠"], ["Staff", "♟"], ["Crew Portal", "☷"]]],
   ["Business", [["CRM", "♙"], ["Projects", "◇"], ["Branding", "◈"]]],
 ];
@@ -51,6 +52,7 @@ function go(name) {
 }
 const pages = {
   Overview: ["A clear picture of the business and the one thing to do next.", () => overview()],
+  "Event Planner": ["Plan an event from idea to derig: checklist, site map, creative, posters and safety documents.", () => planner()],
   Pipeline: ["Every job from first enquiry to invoice. Move a job along as it progresses.", () => pipeline()],
   Calendar: ["Jobs, crew and kit by day.", () => calendar()],
   Jobs: ["Create jobs, build the kit list and quote.", () => jobs()],

@@ -36,6 +36,8 @@ Builds on the existing Cloudflare-hosted app (owner dashboard, crew portal, stoc
 - Cleaner spacing, consistent buttons, mobile-friendly crew layouts.
 
 ## Phase 4: Event Planner module
+**Status: part 1 built and tested locally (23 Nov 2026): planner, checklist, site map, creative board, AI images, poster studio, document approval. Part 2 next: Aberravon Beach Fest template and AI drafting of safety documents from the uploaded event documents.**
+
 "Plan an Event" guided checklist built from templates of past events. Stages:
 1. Concept and creative design
 2. Venue, licensing and permissions
