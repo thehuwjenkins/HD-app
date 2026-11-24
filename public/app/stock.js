@@ -249,5 +249,47 @@ export function planLoad(kit,inventory,vehicles){
   for(const v of vehicles){const r=packVehicle(rest,v);loads.push({vehicle:v,...r});rest=r.left;}
   return {loads,left:rest,noSize,inside,boxes:boxes.length};
 }
+// ---------- Inventory import (CSV or tab-separated, e.g. pasted from a spreadsheet or ChatGPT) ----------
+export function parseTable(text){
+  const t=String(text||'').replace(/^﻿/,'').trim();if(!t)return [];
+  const sep=(t.split('\n')[0].match(/\t/g)||[]).length?'\t':',';
+  const rows=[];let row=[],cell='',q=false;
+  for(let i=0;i<t.length;i++){
+    const c=t[i];
+    if(q){if(c==='"'&&t[i+1]==='"'){cell+='"';i++;}else if(c==='"')q=false;else cell+=c;continue;}
+    if(c==='"'&&cell==='')q=true;else if(c===sep){row.push(cell);cell='';}
+    else if(c==='\n'||c==='\r'){if(c==='\r'&&t[i+1]==='\n')i++;row.push(cell);rows.push(row);row=[];cell='';}
+    else cell+=c;
+  }
+  row.push(cell);rows.push(row);
+  return rows.map(r=>r.map(x=>x.trim())).filter(r=>r.some(Boolean));
+}
+const IMPORT_COLS=[['name',/^(equipment|item|name|description)/],['category',/^categ/],['qty',/^(owned|qty|quantity)/],['service',/out of service|service/],
+  ['lengthCm',/^length/],['widthCm',/^width/],['heightCm',/^height/],['weightEst',/weight.*estim/],['weightKg',/weight/],['valueEst',/value.*estim/],['value',/value|cost|worth/],
+  ['price',/hire|price|rate/],['stackable',/stack/],['inCase',/inside|in case/],['notes',/note|source/]];
+const yes=v=>/^(y|yes|true|1|x|✓)$/i.test(String(v).trim());
+const numIn=v=>{const n=Number(String(v).replace(/[£,\skgcm~]/gi,''));return String(v).trim()!==''&&Number.isFinite(n)?n:undefined;};
+// Turn a pasted table into inventory items. Returns {items, skipped, columns}.
+export function importRows(text){
+  const rows=parseTable(text);if(rows.length<2)return {items:[],skipped:[],columns:[]};
+  const head=rows[0].map(h=>h.toLowerCase());
+  const map=head.map(h=>{const hit=IMPORT_COLS.find(([,re])=>re.test(h));return hit?hit[0]:null;});
+  // Avoid one heading claiming two fields (first match wins).
+  const used=new Set();map.forEach((f,i)=>{if(f&&used.has(f))map[i]=null;else if(f)used.add(f);});
+  if(!map.includes('name'))throw Error('The first row must be headings, including one called "Equipment" or "Item".');
+  const items=[],skipped=[];
+  rows.slice(1).forEach((r,n)=>{
+    const o={};map.forEach((f,i)=>{if(f&&r[i]!==undefined&&r[i]!=='')o[f]=r[i];});
+    if(!o.name||/^total/i.test(o.name)){if(r.some(Boolean)&&!/^total/i.test(o.name||''))skipped.push('Row '+(n+2)+': no equipment name');return;}
+    const it={name:o.name.slice(0,120)};
+    if(o.category)it.category=o.category;
+    for(const f of ['qty','service','lengthCm','widthCm','heightCm','weightKg','value','price']){const v=numIn(o[f]);if(v!==undefined&&v>=0)it[f]=f==='qty'||f==='service'?Math.round(v):v;}
+    for(const f of ['weightEst','valueEst','inCase'])if(o[f]!==undefined)it[f]=yes(o[f]);
+    if(o.stackable!==undefined&&!yes(o.stackable))it.stackable=false;
+    if(o.notes)it.notes=o.notes.slice(0,500);
+    items.push(it);
+  });
+  return {items,skipped,columns:map.filter(Boolean)};
+}
 // Shared with the browser: the owner page loads this file as a module and uses the same checks.
-if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, inventoryTotals, loadCheck, loadItems, packVehicle, planLoad, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});
+if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, inventoryTotals, loadCheck, parseTable, importRows, loadItems, packVehicle, planLoad, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});

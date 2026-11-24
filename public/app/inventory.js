@@ -20,7 +20,7 @@ function inventory() {
     ${me.money ? `<div><span class="muted">Total kit value</span><b>${money(t.value)}</b><span class="muted">${t.missingValue ? t.missingValue + " without a value" : "All items valued"}${t.estValue ? " · " + t.estValue + " estimated" : ""}</span></div>` : ""}
     <div><span class="muted">Total weight</span><b>${kg(t.weight)}</b><span class="muted">${t.missingWeight ? t.missingWeight + " without a weight" : "All items weighed"}${t.estWeight ? " · " + t.estWeight + " estimated" : ""}</span></div></div>
     <p class="hint">~ means an estimate (for example a second-hand value or a custom flight case weight). Weights are per unit as it travels, in its case if it has its own.</p>`;
-  let content = `${summary}<div class="inventory-tools"><input class="field" placeholder="Search kit by name..." value="${esc(inventoryQuery)}" oninput="inventoryQuery=this.value;updateInventoryResults()"><div class="view-switch"><button class="btn secondary ${inventoryView === "grid" ? "active" : ""}" onclick="inventoryView='grid';updateInventoryResults()">Grid</button><button class="btn secondary ${inventoryView === "list" ? "active" : ""}" onclick="inventoryView='list';updateInventoryResults()">List</button></div><button class="btn secondary" onclick="printInventory()">Print</button><button class="btn secondary" onclick="exportInventory()">Export spreadsheet</button></div><div id="inventoryResults">${inventoryResults(matches)}</div>`;
+  let content = `${summary}<div class="inventory-tools"><input class="field" placeholder="Search kit by name..." value="${esc(inventoryQuery)}" oninput="inventoryQuery=this.value;updateInventoryResults()"><div class="view-switch"><button class="btn secondary ${inventoryView === "grid" ? "active" : ""}" onclick="inventoryView='grid';updateInventoryResults()">Grid</button><button class="btn secondary ${inventoryView === "list" ? "active" : ""}" onclick="inventoryView='list';updateInventoryResults()">List</button></div><button class="btn secondary" onclick="openInventoryImport()">Import list</button><button class="btn secondary" onclick="printInventory()">Print</button><button class="btn secondary" onclick="exportInventory()">Export spreadsheet</button></div><div id="inventoryResults">${inventoryResults(matches)}</div>`;
   return (
     panel(
       "Kit / Inventory",
@@ -133,6 +133,73 @@ function exportInventory() {
   document.body.appendChild(a);
   a.click();
   a.remove();
+}
+// ---------- Import a list (pasted from a spreadsheet, CSV or ChatGPT) ----------
+const IMPORT_HEADINGS = "Equipment,Category,Owned,Out of service,Length (cm),Width (cm),Height (cm),Weight each (kg),Weight estimated,Value each (£),Value estimated,Hire price per day (£),Stackable,Inside another case,Notes";
+function openInventoryImport() {
+  const root = document.createElement("div");
+  root.className = "modal";
+  root.id = "importDialog";
+  root.innerHTML = `<div class="panel"><div class="line"><h2 style="margin:0">Import equipment list</h2><button type="button" class="btn small ghost" onclick="$('importDialog').remove()">Close</button></div>
+    <p>Paste a table copied from Excel or Google Sheets, or CSV text (for example from ChatGPT). The first row must be headings. Items whose name matches one already in your inventory are updated; the rest are added.</p>
+    <p class="hint">Headings the app understands (any order, any you don't have can be left out):</p><pre class="import-head">${esc(IMPORT_HEADINGS)}</pre>
+    <div class="toolbar"><button type="button" class="btn small secondary" onclick="copyImportHeadings()">Copy these headings</button></div>
+    <textarea class="field" id="importText" rows="10" placeholder="Paste here…" oninput="previewImport()"></textarea>
+    <div id="importPreview" class="hint"></div>
+    <div class="toolbar"><button class="btn big" id="importGo" disabled onclick="runImport()">Import</button></div></div>`;
+  document.body.appendChild(root);
+  $("importText").focus();
+}
+async function copyImportHeadings() {
+  try {
+    await navigator.clipboard.writeText(IMPORT_HEADINGS);
+    toast("Headings copied");
+  } catch {
+    alert(IMPORT_HEADINGS);
+  }
+}
+function importPlan() {
+  const { items, skipped } = importRows($("importText").value);
+  const byName = new Map(db.inventory.map((i) => [i.name.toLowerCase(), i]));
+  return { items, skipped, added: items.filter((i) => !byName.has(i.name.toLowerCase())).length, updated: items.filter((i) => byName.has(i.name.toLowerCase())).length };
+}
+function previewImport() {
+  const el = $("importPreview"),
+    go = $("importGo");
+  try {
+    const p = importPlan();
+    go.disabled = !p.items.length;
+    el.innerHTML = p.items.length ? `Ready: <b>${p.added}</b> new item${p.added === 1 ? "" : "s"}, <b>${p.updated}</b> to update.${p.skipped.length ? " Skipped: " + p.skipped.map(esc).join("; ") : ""}` : "Paste a table with a heading row to see what will be imported.";
+  } catch (e) {
+    go.disabled = true;
+    el.innerHTML = `<span class="warn">${esc(e.message)}</span>`;
+  }
+}
+function runImport() {
+  const p = importPlan();
+  const byName = new Map(db.inventory.map((i) => [i.name.toLowerCase(), i]));
+  const next = db.inventory.map((i) => ({ ...i }));
+  const index = new Map(next.map((i, n) => [i.name.toLowerCase(), n]));
+  for (const it of p.items) {
+    const clean = { ...it };
+    if (!me.money) for (const f of ["value", "valueEst", "price"]) delete clean[f];
+    const key = it.name.toLowerCase();
+    if (index.has(key)) Object.assign(next[index.get(key)], clean);
+    else {
+      next.push({ id: uid() + next.length, qty: 1, service: 0, price: 0, photo: "", category: guessCategory(it.name), ...clean });
+      index.set(key, next.length - 1);
+    }
+  }
+  try {
+    validate({ ...db, inventory: next });
+  } catch (e) {
+    return alert("Nothing imported. " + e.message);
+  }
+  db.inventory = next;
+  $("importDialog").remove();
+  save();
+  render();
+  toast(`Imported: ${p.added} added, ${p.updated} updated`);
 }
 // ---------- Vans and trailers ----------
 function vehicleList() {

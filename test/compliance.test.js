@@ -123,3 +123,17 @@ test('van packing: overflow moves to the next vehicle, and too-big items are rep
   assert.deepEqual(r.left.map((b) => b.name), ['Truss 3m']);
   assert.match(packVehicle([], {name: 'X'}).error, /No load space size/);
 });
+
+import {importRows} from '../public/app/stock.js';
+test('inventory import from a pasted spreadsheet or CSV (e.g. made with ChatGPT)', () => {
+  const csv = 'Equipment,Category,Owned,Out of service,Length (cm),Width (cm),Height (cm),Weight each (kg),Weight estimated,Value each (£),Value estimated,Hire price per day (£),Notes\n' +
+    'Allen & Heath SQ5,Audio,1,0,72,51,22,"18.5",No,"£2,350",Yes,120,"Used price, eBay sold, Nov 2026"\n' +
+    'Nexo PS10,Audio,4,,66,45,78,22.6,,650,yes,45,\n\nTOTAL,,5,,,,,,,,,,\n';
+  const r = importRows(csv);
+  assert.deepEqual(r.items[0], {name: 'Allen & Heath SQ5', category: 'Audio', qty: 1, service: 0, lengthCm: 72, widthCm: 51, heightCm: 22, weightKg: 18.5, weightEst: false, value: 2350, valueEst: true, price: 120, notes: 'Used price, eBay sold, Nov 2026'});
+  assert.equal(r.items[1].valueEst, true);
+  assert.equal(r.items.length, 2, 'TOTAL row ignored');
+  const tsv = importRows('Item\tQty\tWeight (kg)\tStackable\tInside case\nSM58\t6\t0.3\tyes\tyes\nDesk case\t1\t35\tno\tno');
+  assert.deepEqual(tsv.items, [{name: 'SM58', qty: 6, weightKg: 0.3, inCase: true}, {name: 'Desk case', qty: 1, weightKg: 35, inCase: false, stackable: false}]);
+  assert.throws(() => importRows('Foo,Bar\n1,2'), /Equipment/);
+});

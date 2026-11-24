@@ -680,3 +680,4 @@ body { background: var(--bg); }
 .kit-line.crew .kit-line-fields { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .time-unit .field { min-width: 58px; }
 .time-unit select.field { flex: 0 0 86px; padding-left: 10px; }
+.import-head { white-space: pre-wrap; font-size: 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px; }
