@@ -1,24 +1,26 @@
 /* HD Events HQ owner app. Phase 3 redesign: one set of colour and spacing tokens, shared components. */
 :root {
-  --bg: #0b1120;
-  --surface: #121c2f;
-  --surface-2: #17233a;
-  --surface-3: #1d2b45;
-  --border: #26354e;
-  --border-strong: #3a4f6c;
-  --text: #e9edf5;
-  --text-2: #b4c1d6;
-  --muted: #8e9db5;
-  --accent: #67d5ed;
-  --accent-ink: #0c1b2b;
-  --warn-bg: #4a3222;
+  /* Colours and type match the HD Events website */
+  --bg: #050609;
+  --surface: #0c0d14;
+  --surface-2: #12131d;
+  --surface-3: #1a1b29;
+  --border: #ffffff17;
+  --border-strong: #ffffff33;
+  --text: #f2f2f0;
+  --text-2: #c4c4cf;
+  --muted: #9c9cab;
+  --accent: #00eeed;
+  --accent-ink: #050609;
+  --purple: #9145ff;
+  --warn-bg: #3d2a14;
   --warn: #ffc78d;
-  --ok-bg: #173f35;
-  --ok: #9de4bf;
-  --danger: #ffab8f;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --gap: 16px;
+  --ok-bg: #0f3a2f;
+  --ok: #8ff0c4;
+  --danger: #ff9f8a;
+  --radius: 20px;
+  --radius-sm: 12px;
+  --gap: 18px;
   /* Pipeline stage colours */
   --st-enquiry: #8b9bb4;
   --st-quote: #c4a1ff;
@@ -26,7 +28,7 @@
   --st-out: #f5b85c;
   --st-returned: #7fd6a4;
   --st-invoiced: #6f86a6;
-  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: 'DM Sans', Arial, sans-serif;
   color: var(--text);
   background: var(--bg);
 }
@@ -383,4 +385,62 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   .print-sheet .print-head { display: flex; justify-content: space-between; border-bottom: 3px solid #111; margin-bottom: 15px; }
   .print-sheet .print-section { margin-top: 18px; }
   .print-sheet .print-info { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+}
+
+
+/* ======================================================================
+   HD Events brand layer: website look, bigger and friendlier controls
+   ====================================================================== */
+body { font-size: 16px; background: radial-gradient(ellipse at 85% -10%, #9145ff1f, transparent 45%), radial-gradient(ellipse at 0% 100%, #00eeed14, transparent 40%), var(--bg); background-attachment: fixed; }
+h1 { font-size: clamp(30px, 3.4vw, 46px); font-weight: 300; letter-spacing: -0.05em; line-height: 1.02; }
+h2 { font-size: 20px; font-weight: 500; letter-spacing: -0.02em; }
+.eyebrow { color: var(--accent); font-size: 11px; letter-spacing: 0.18em; font-weight: 500; }
+.top p { color: var(--muted); font-size: 15px; }
+/* Sidebar */
+.side { background: #08090e; border-right: 1px solid var(--border); padding: 22px 14px; width: 250px; }
+.brand img { filter: drop-shadow(0 0 18px #00eeed33); }
+.nav { padding: 12px 14px; font-size: 15.5px; border-radius: 14px; margin: 3px 0; font-weight: 500; }
+.nav .ico { font-size: 18px; width: 24px; }
+.nav.active { background: linear-gradient(90deg, #00eeed22, #9145ff18); color: #fff; box-shadow: inset 3px 0 0 var(--accent); }
+.nav:hover { background: var(--surface-3); }
+.nav-group { padding: 20px 14px 8px; font-size: 11px; letter-spacing: 0.16em; }
+/* Buttons: pill shaped like the website, big and easy to press */
+.btn { border-radius: 999px; min-height: 48px; padding: 12px 22px; font-size: 15px; font-weight: 600; transition: transform .15s, background .2s, box-shadow .2s; }
+.btn:hover { filter: none; transform: translateY(-2px); box-shadow: 0 8px 24px #00eeed33; }
+.btn:active { transform: translateY(0); }
+.btn.secondary { background: transparent; color: var(--text); border: 1px solid var(--border-strong); }
+.btn.secondary:hover { border-color: var(--accent); color: #fff; box-shadow: none; }
+.btn.ghost:hover, .btn.danger:hover { box-shadow: none; }
+.btn.small { min-height: 40px; padding: 8px 16px; font-size: 14px; }
+.btn.big { min-height: 60px; padding: 16px 30px; font-size: 17px; }
+.chip { min-height: 38px; padding: 8px 16px; font-size: 13px; border-radius: 999px; }
+/* Cards and panels */
+.panel, .card { border-radius: var(--radius); padding: 24px; background: linear-gradient(160deg, #10112a66, #0a0b12 60%), var(--surface); }
+.stat { border-radius: var(--radius); padding: 22px; min-height: 130px; background: linear-gradient(160deg, #10112a, #0a0b12); transition: border-color .2s, transform .2s; }
+.stat:hover { border-color: #00eeed66; transform: translateY(-3px); }
+.stat .value { font-size: 40px; font-weight: 600; letter-spacing: -0.04em; }
+.stat .label { color: var(--accent); letter-spacing: 0.14em; font-weight: 500; font-size: 11px; }
+.next-action { border-radius: var(--radius); padding: 24px 26px; background: linear-gradient(110deg, #00eeed1f, #9145ff26); border: 1px solid #9145ff55; }
+.next-action b { font-size: 22px; font-weight: 500; }
+/* Big, friendly form fields */
+.field { min-height: 50px; padding: 12px 16px; font-size: 16px; border-radius: 14px; background: #08090e; border-color: var(--border-strong); }
+.field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px #00eeed26; }
+textarea.field { min-height: 110px; }
+.form label > .muted { font-size: 13px; color: var(--text-2); margin-bottom: 7px; }
+.check { width: 22px; height: 22px; }
+.status-btn { width: 34px; height: 34px; flex-basis: 34px; font-size: 15px; }
+.line { padding: 14px 0; }
+.tag, .stage { font-size: 12px; padding: 5px 12px; }
+.tabs button { padding: 14px 18px; font-size: 15px; }
+.tabs button.active { border-bottom-color: var(--accent); }
+.plan-hero, .countdown { background: linear-gradient(120deg, #00eeed1a, #9145ff2e); border-color: #9145ff55; }
+.toast { background: #0c0d14; border-color: var(--accent); border-radius: 16px; }
+.strip button { min-height: 76px; border-radius: 16px; }
+.cal-day { min-height: 110px; }
+.board-card { border-radius: 14px; padding: 14px; }
+@media (max-width: 820px) {
+  .side { width: 100%; padding: 10px 12px 8px; }
+  .nav { padding: 10px 16px; font-size: 15px; }
+  .btn { min-height: 50px; }
+  h1 { font-size: 30px; }
 }

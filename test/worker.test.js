@@ -52,7 +52,7 @@ test('crew page works before and after the upgrade', async () => {
   await call(env, OWNER, 'POST', '/api/migrate', {});
   const crew = await (await call(env, 'sam@example.com', 'GET', '/')).text();
   assert.match(crew, /Summer Fete/);
-  assert.match(crew, /src="\/logo.jpg"/);
+  assert.match(crew, /src="\/logo.png"/);
   assert.equal((await call(env, 'stranger@example.com', 'GET', '/')).status, 403);
 });
 
@@ -111,7 +111,7 @@ test('app files and logo are served to signed-in users', async () => {
   const js = await call(env, 'sam@example.com', 'GET', '/app/core.js');
   assert.equal(js.status, 200);
   assert.match(await js.text(), /function render/);
-  assert.equal((await call(env, OWNER, 'GET', '/logo.jpg')).headers.get('content-type'), 'image/jpeg');
+  assert.equal((await call(env, OWNER, 'GET', '/logo.png')).headers.get('content-type'), 'image/png');
 });
 
 test('back up now, import, undo and restore through the API', async () => {

@@ -1,6 +1,6 @@
 // HD Events HQ owner app: shared state, helpers and page rendering.
 // The server puts the workspace into <script id="boot">; each feature lives in its own file in /app.
-const DEFAULT_HD_LOGO = "/logo.jpg";
+const DEFAULT_HD_LOGO = "/logo.png";
 const boot = JSON.parse(document.getElementById("boot").textContent);
 let db = boot.state;
 // Fill in fields that older records may be missing (display defaults only; not saved unless the record is edited).

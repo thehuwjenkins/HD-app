@@ -63,7 +63,7 @@ import {readFile} from 'node:fs/promises';
 export const assets = {
   async fetch(req) {
     const path = new URL(req.url).pathname;
-    try { return new Response(await readFile(new URL('../public' + path, import.meta.url)), {headers: {'content-type': path.endsWith('.js') ? 'text/javascript' : path.endsWith('.css') ? 'text/css' : path.endsWith('.jpg') ? 'image/jpeg' : 'application/octet-stream'}}); }
+    try { return new Response(await readFile(new URL('../public' + path, import.meta.url)), {headers: {'content-type': path.endsWith('.js') ? 'text/javascript' : path.endsWith('.css') ? 'text/css' : path.endsWith('.jpg') ? 'image/jpeg' : path.endsWith('.png') ? 'image/png' : 'application/octet-stream'}}); }
     catch { return new Response('Not found', {status: 404}); }
   },
 };

@@ -101,7 +101,7 @@ async fetch(req,env){
   if(path.startsWith('/api/'))return api(req,env,url,email,owner);
   if(req.method!=='GET')return reply('Not found',404);
   // App code, styles and the logo: any signed-in person may load them (they hold no business data).
-  if(path.startsWith('/app/')||path==='/logo.jpg')return env.ASSETS.fetch(req);
+  if(path.startsWith('/app/')||path==='/logo.png')return env.ASSETS.fetch(req);
   if(path.startsWith('/files/'))return serveFile(env,path);
   if(path!=='/')return reply('Not found',404);
 
