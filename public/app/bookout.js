@@ -120,10 +120,27 @@ function closeWithMissing(id) {
   $("bookDialog")?.remove();
   moveTo(id, "returned");
 }
-// Kit that should be back by now but hasn't been booked in.
-function overdueReturns() {
-  const now = Date.now();
+// Late returns: the job's return time has passed and kit isn't booked back in. That covers kit
+// booked out and not back, jobs still marked Booked / Out on hire after their return date (even if
+// nothing was booked out in the app), and jobs closed with items missing.
+function lateReturns(now = Date.now()) {
   return db.jobs
-    .map((j) => ({ j, p: bookingProgress(j) }))
-    .filter(({ j, p }) => p && p.still && (["returned", "invoiced"].includes(stageOf(j)) || bounds(j)[1] < now));
+    .map((j) => {
+      const p = bookingProgress(j),
+        st = stageOf(j),
+        end = bounds(j)[1];
+      const past = Number.isFinite(end) && end < now;
+      const kitOut = p ? p.still : 0;
+      const stillMarkedOut = past && ["booked", "out"].includes(st) && !kitOut && !(p && p.back);
+      if (!(kitOut && (past || ["returned", "invoiced"].includes(st))) && !stillMarkedOut) return null;
+      const items = kitOut || pickItems(j, db.inventory).reduce((s, r) => s + r.need, 0);
+      return { j, p, items, days: past ? Math.max(0, Math.floor((now - end) / 86400000)) : 0, missing: ["returned", "invoiced"].includes(st) };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.days - a.days);
+}
+const overdueReturns = () => lateReturns();
+const isLate = (j) => lateReturns().some((x) => x.j.id === j.id);
+function lateText(x) {
+  return x.missing ? "closed with kit missing" : x.days === 0 ? "due back today" : x.days === 1 ? "1 day late" : x.days + " days late";
 }

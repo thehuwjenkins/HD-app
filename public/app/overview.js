@@ -25,9 +25,9 @@ function overviewFacts() {
 // The single most useful thing to do next.
 function nextAction(f) {
   const n = (x, one, many) => (x === 1 ? one : many.replace("#", x));
-  const overdue = overdueReturns();
-  if (overdue.length)
-    return [`${overdue[0].p.still} item${overdue[0].p.still > 1 ? "s" : ""} not booked back in from ${esc(overdue[0].j.title)}`, `${overdue.length > 1 ? overdue.length - 1 + " more job(s) also have kit out. " : ""}They count as out until they're booked in.`, "Book in", `openBooking(${overdue[0].j.id},'in')`];
+  const late = lateReturns();
+  if (late.length)
+    return [`Late return: ${esc(late[0].j.title)} (${lateText(late[0])})`, `${late[0].items} item${late[0].items === 1 ? "" : "s"} not booked back in.${late.length > 1 ? " " + (late.length - 1) + " more late return" + (late.length > 2 ? "s" : "") + "." : ""} Kit counts as out until it's booked in.`, "Book in", `openBooking(${late[0].j.id},'in')`];
   const accepted = db.jobs.filter((j) => j.acceptedAt && stageOf(j) === "quote");
   if (accepted.length)
     return [`${esc(accepted[0].acceptedBy || "The client")} accepted the quote for ${esc(accepted[0].title)}`, esc(accepted[0].needsBooking || "It needs booking."), "Book it", `acceptJob(${accepted[0].id})`];
@@ -76,11 +76,13 @@ function overview() {
     ${stat("This week", f.week.length, f.week.length ? fmtDay(f.wkFrom, { day: "numeric", month: "short" }) + " – " + fmtDay(f.wkTo, { day: "numeric", month: "short" }) : "No jobs this week", "go('Calendar')")}
     ${stat("Kit shortages", f.short.length, f.short.length ? "jobs can't be fully supplied" : "All jobs covered", "go('Cross-hire')", f.short.length)}
     ${stat("Tasks due", f.dueSoon.length, f.overdue.length ? f.overdue.length + " overdue · " + f.open.length + " open" : f.open.length + " open in total", "go('My Workday')", f.overdue.length)}
+    ${stat("Late returns", lateReturns().length, lateReturns().length ? lateReturns().reduce((s, x) => s + x.items, 0) + " items not booked back in" : "Everything's back", "showJobs('late')", lateReturns().length)}
     ${stat("Outstanding quotes", f.quotes.length, money(f.quotes.reduce((s, j) => s + jobValue(j), 0)) + " awaiting a decision", "showJobs('quote')")}
   </div>
   <p class="hint" style="margin:0 0 6px">Pipeline · ${money(monthBooked.reduce((s, j) => s + jobValue(j), 0))} booked for ${fmtDay(f.today, { month: "long" })} (excluding VAT, not payments received)</p>
   <div class="strip" aria-label="Pipeline">${STAGES.map((s) => `<button data-stage="${s}" onclick="showJobs('${s}')" title="Show ${STAGE_LABELS[s]} jobs"><b>${f.byStage[s].length}</b><span>${STAGE_LABELS[s]}</span></button>`).join("")}</div>
   <div class="cols">
+    ${lateReturns().length ? panel("Late returns", lateReturns().map((x) => row(`<b>${esc(x.j.title)}</b><div class="muted">${esc(lateText(x))} · ${x.items} item${x.items === 1 ? "" : "s"} still out · due back ${esc(fmtDay(String(x.j.end).slice(0, 10), { day: "numeric", month: "short" }))}</div>`, `<span class="tag danger-tag">Late</span> <button class="btn small" onclick="openBooking(${x.j.id},'in')">Book in</button>`)).join("")) : ""}
     ${panel("This week", f.week.length ? f.week.map(jobRow).join("") : '<p class="empty">No jobs this week.</p>')}
     ${panel(
       "Tasks due",
