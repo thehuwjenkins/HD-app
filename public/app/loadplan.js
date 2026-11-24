@@ -56,11 +56,16 @@ function loadTopView(load, colourOf) {
   const s = (width - pad * 2) / L,
     height = Math.ceil(W * s + pad * 2);
   let svg = `<rect x="${pad}" y="${pad}" width="${L * s}" height="${W * s}" fill="#eef1f6" stroke="#9aa5b5"/>`;
-  for (const b of [...load.placed].sort((a, c) => a.z + a.h - (c.z + c.h))) {
-    svg += `<g><title>${esc(b.name)}${b.z ? " (stacked, top at " + (b.z + b.h) + " cm)" : ""}</title><rect x="${(pad + b.x * s).toFixed(1)}" y="${(pad + b.y * s).toFixed(1)}" width="${(b.l * s).toFixed(1)}" height="${(b.w * s).toFixed(1)}" fill="${colourOf(b.name)}" stroke="#1b2436" stroke-width="0.8"/>`;
-    if (b.l * s > 34 && b.w * s > 16) svg += `<text x="${(pad + (b.x + b.l / 2) * s).toFixed(1)}" y="${(pad + (b.y + b.w / 2) * s + 4).toFixed(1)}" font-size="11" fill="#fff" text-anchor="middle">${Math.round(b.z + b.h)}</text>`;
-    svg += "</g>";
-  }
+  const order = [...load.placed].sort((a, c) => a.z + a.h - (c.z + c.h));
+  for (const b of order)
+    svg += `<rect x="${(pad + b.x * s).toFixed(1)}" y="${(pad + b.y * s).toFixed(1)}" width="${(b.l * s).toFixed(1)}" height="${(b.w * s).toFixed(1)}" fill="${colourOf(b.name)}" stroke="#1b2436" stroke-width="0.8"><title>${esc(b.name)}${b.z ? " (stacked, top at " + (b.z + b.h) + " cm)" : ""}</title></rect>`;
+  // Height labels only where nothing taller covers the middle of the box.
+  order.forEach((b, n) => {
+    const cx = b.x + b.l / 2,
+      cy = b.y + b.w / 2;
+    const covered = order.slice(n + 1).some((c) => Math.abs(c.x + c.l / 2 - cx) < c.l / 2 + 12 && Math.abs(c.y + c.w / 2 - cy) < c.w / 2 + 6);
+    if (!covered && b.l * s > 34 && b.w * s > 16) svg += `<text x="${(pad + cx * s).toFixed(1)}" y="${(pad + cy * s + 4).toFixed(1)}" font-size="11" fill="#fff" text-anchor="middle">${Math.round(b.z + b.h)}</text>`;
+  });
   svg += `<text x="${pad}" y="${height - 1}" font-size="12" fill="#556070">Cab end</text><text x="${pad + L * s}" y="${height - 1}" font-size="12" fill="#556070" text-anchor="end">Rear doors</text>`;
   return `<svg class="load-svg top" viewBox="0 0 ${width} ${height + 4}" role="img" aria-label="Load seen from above">${svg}</svg>`;
 }
@@ -123,6 +128,6 @@ function openLoadPlanner() {
   const root = document.createElement("div");
   root.className = "modal";
   root.id = "loadDialog";
-  root.innerHTML = `<div class="panel load-dialog"><div class="line"><h2 style="margin:0">Van load plan</h2><button type="button" class="btn small ghost" onclick="$('loadDialog').remove()">Close</button></div>${loadPlanner(draftKit, ids)}</div>`;
+  root.innerHTML = `<div class="panel load-dialog"><div class="line"><h2 style="margin:0">Van load plan</h2><div class="toolbar" style="margin:0"><button type="button" class="btn small secondary" onclick="printLoadPlan()">Print load plan</button><button type="button" class="btn small ghost" onclick="$('loadDialog').remove()">Close</button></div></div>${loadPlanner(draftKit, ids)}</div>`;
   document.body.appendChild(root);
 }

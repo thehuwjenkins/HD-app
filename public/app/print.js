@@ -1,92 +1,240 @@
-function printJob(id) {
-  let j = db.jobs.find((x) => x.id === id);
-  if (!j) return;
-  let shortages = jobShortages(j);
-  let rows = (j.kit || [])
-    .map((k) => {
-      let issue = shortages.find((s) => s.name === k.item);
-      return `<tr><td style="width:40px">☐</td><td>${esc(k.item)}</td><td>${k.qty}</td><td>${issue ? "SHORT " + issue.short : "—"}</td></tr>`;
-    })
-    .join("");
-  let markup = `<div class="print-sheet"><div class="print-head"><h1>HD EVENTS · JOB SHEET</h1><div>Job #${j.id}</div></div><h2>${esc(j.title)}</h2><div class="print-info"><div><b>Client:</b> ${esc(j.client)}</div><div><b>Venue:</b> ${esc(j.venue)}</div><div><b>Contact:</b> ${esc(j.contact)}</div><div><b>Allocation:</b> ${esc(j.start)} to ${esc(j.end)}</div><div><b>Load-in / show:</b> ${esc(j.load)}</div></div><div class="print-section"><h2>Equipment prep / loading list</h2><table><thead><tr><th>Packed</th><th>Equipment</th><th>Qty</th><th>Availability</th></tr></thead><tbody>${rows}</tbody></table></div><div class="print-section"><h2>Notes / crew</h2><p style="white-space:pre-wrap;color:#111">${esc(j.notes)}</p></div><div class="print-section"><h2>Shortfall / cross-hire</h2>${shortages.length ? shortages.map((x) => `<p style="color:#111">${esc(x.name)} — ${x.short} short</p>`).join("") : '<p style="color:#111">No shortages detected</p>'}</div><div class="print-section"><b>Prepared by:</b> ____________________ &nbsp;&nbsp; <b>Checked by:</b> ____________________</div></div>`;
-  let existing = $("printArea");
-  if (existing) existing.remove();
-  let area = document.createElement("div");
-  area.id = "printArea";
-  area.style.display = "none";
-  area.innerHTML = markup;
-  document.body.appendChild(area);
-  let style = document.createElement("style");
-  style.id = "printStyle";
-  style.textContent = "@media print{body>.app{display:none!important}#printArea{display:block!important}}";
-  document.head.appendChild(style);
-  window.print();
-  setTimeout(() => {
-    area.remove();
-    style.remove();
-  }, 1000);
+// Printable documents: picking list, quote, invoice, inventory, event checklist and van load plan.
+// Each opens in its own tab with a clean A4 layout and a "Print / Save as PDF" button.
+
+const PRINT_CSS = `
+*{box-sizing:border-box}body{margin:0;background:#e9edf3;color:#111827;font:12px/1.45 Arial,Helvetica,sans-serif}
+.actions{position:sticky;top:0;z-index:2;display:flex;gap:10px;justify-content:center;padding:12px;background:#0f1630}
+.actions button{font:600 15px Arial,sans-serif;padding:12px 22px;border-radius:999px;border:0;cursor:pointer;background:linear-gradient(120deg,#00808c,#6d35e8);color:#fff}
+.actions button.plain{background:#fff;color:#0f1630}
+.sheet{background:#fff;max-width:210mm;margin:16px auto;padding:14mm 13mm;box-shadow:0 4px 24px #0002}
+.ph{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;padding-bottom:12px;margin-bottom:14px;border-bottom:3px solid #111827;position:relative}
+.ph:after{content:"";position:absolute;left:0;right:0;bottom:-6px;height:3px;background:linear-gradient(90deg,#00eeed,#9145ff)}
+.logo{display:inline-block;background:#0f1630;border-radius:8px;padding:8px 12px}.logo img{display:block;max-height:46px;max-width:180px}
+.co{font-size:11px;color:#374151;margin-top:6px;line-height:1.5}.brand{font:800 20px Arial,sans-serif;letter-spacing:.06em}
+.ph-right{text-align:right}.ph-right h1{margin:0 0 4px;font-size:22px;letter-spacing:.04em}.ph-right div{font-size:11px;color:#374151}
+h2{font-size:14px;margin:18px 0 6px;padding-bottom:3px;border-bottom:1px solid #9ca3af}h3{font-size:12.5px;margin:12px 0 4px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 24px}.grid div b{display:inline-block;min-width:92px;color:#374151}
+table{width:100%;border-collapse:collapse;margin-top:4px}th,td{border:1px solid #c5ccd6;padding:6px 7px;text-align:left;vertical-align:top}
+th{background:#eef1f6;font-size:11px;text-transform:uppercase;letter-spacing:.03em}tr{break-inside:avoid}
+td.num,th.num{text-align:right}td.box{width:44px;text-align:center}.box i{display:inline-block;width:14px;height:14px;border:1.5px solid #111827;border-radius:2px}
+.cat td{background:#f6f8fb;font-weight:700}.muted{color:#6b7280}.warn{color:#b42318;font-weight:700}.ok{color:#067647;font-weight:700}
+.totals{margin-left:auto;width:55%;margin-top:10px}.totals td{border:0;border-bottom:1px solid #e5e7eb}.totals tr.grand td{font-size:15px;font-weight:700;border-top:2px solid #111827}
+.note{margin-top:14px;padding:10px 12px;border:1px solid #c5ccd6;border-radius:6px;white-space:pre-wrap}
+.sign{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:26px}.sign div{border-top:1px solid #111827;padding-top:4px;font-size:11px;color:#374151}
+.foot{margin-top:22px;padding-top:8px;border-top:1px solid #e5e7eb;font-size:10px;color:#6b7280}
+svg{max-width:100%;height:auto;display:block;margin:6px 0}.swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px}
+.stage-h{break-after:avoid}
+@media print{body{background:#fff}.actions{display:none!important}.sheet{box-shadow:none;margin:0;max-width:none;padding:0}
+@page{size:A4;margin:12mm}.logo,.ph:after,th,.cat td,.swatch,svg{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
+
+const pDate = (d) => (d ? fmtDay(String(d).slice(0, 10), { day: "numeric", month: "short", year: "numeric" }) : "");
+const pMoney = (n) => "£" + (Number(n) || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Open a document in a new tab. Returns the HTML (handy for checks).
+function printDocument(title, ref, body, { foot = "" } = {}) {
+  const info = db.company || {};
+  const logo = db.branding?.logo;
+  const contact = [info.address, [info.phone, info.email].filter(Boolean).join(" · "), info.website].filter(Boolean).map(esc).join("<br>");
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}${ref ? " " + esc(ref) : ""} · ${esc(info.name || "HD Events")}</title><style>${PRINT_CSS}</style></head><body>
+  <div class="actions"><button onclick="print()">Print / Save as PDF</button><button class="plain" onclick="close()">Close</button></div>
+  <div class="sheet"><div class="ph"><div>${logo ? `<span class="logo"><img src="${esc(new URL(logo, location.href).href)}" alt="${esc(info.name || "HD Events")}"></span>` : `<span class="brand">${esc(info.name || "HD EVENTS")}</span>`}<div class="co">${contact}</div></div>
+  <div class="ph-right"><h1>${esc(title.toUpperCase())}</h1>${ref ? `<div>${esc(ref)}</div>` : ""}<div>Printed ${esc(pDate(todayKey()))}</div></div></div>
+  ${body}<div class="foot">${foot || esc(info.name || "HD Events")}${info.companyNumber ? " · Company no. " + esc(info.companyNumber) : ""}${info.vatNumber ? " · VAT no. " + esc(info.vatNumber) : ""}</div></div></body></html>`;
+  const w = window.open("", "_blank");
+  if (!w) {
+    alert("Please allow pop-ups for this site to open printable documents.");
+    return html;
+  }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  return html;
 }
+
+const jobClient = (j) => db.clients.find((x) => String(x.id) === String(j.clientId)) || {};
+function jobCrew(j) {
+  const names = [];
+  const lead = db.staff.find((s) => String(s.id) === String(j.staffId));
+  if (lead) names.push(lead.name);
+  db.crewInvites.filter((i) => String(i.jobId) === String(j.id)).forEach((i) => {
+    const s = db.staff.find((x) => String(x.id) === String(i.staffId));
+    if (s && !names.includes(s.name)) names.push(s.name + (i.status ? " (" + i.status + ")" : ""));
+  });
+  return names;
+}
+function jobInfoGrid(j) {
+  const c = jobClient(j);
+  const vehicles = vehicleList().filter((v) => (j.vehicleIds || []).map(String).includes(String(v.id))).map((v) => v.name);
+  const rows = [
+    ["Client", j.client || c.name],
+    ["Contact", [c.name && c.name !== j.client ? c.name : "", j.contact, c.phone].filter(Boolean).join(" · ")],
+    ["Venue", j.venue],
+    ["Dates", fmtRange(j)],
+    ["Load-in / show", j.load],
+    ["Crew", jobCrew(j).join(", ")],
+    ["Vehicles", vehicles.join(", ")],
+    ["Stage", STAGE_LABELS[stageOf(j)]],
+  ].filter(([, v]) => v);
+  return `<div class="grid">${rows.map(([k, v]) => `<div><b>${k}</b> ${esc(v)}</div>`).join("")}</div>`;
+}
+
+// ---------- Picking list (job sheet) ----------
+function printJob(id) {
+  const j = db.jobs.find((x) => x.id === id);
+  if (!j) return;
+  const short = jobShortages(j);
+  const inv = new Map(db.inventory.map((i) => [i.name, i]));
+  const byCat = {};
+  (j.kit || []).forEach((k) => (byCat[k.category || inv.get(k.item)?.category || "Audio"] ||= []).push(k));
+  const load = loadCheck(j, db.inventory, vehicleList());
+  const rows = Object.entries(byCat)
+    .map(
+      ([cat, lines]) =>
+        `<tr class="cat"><td colspan="6">${esc(cat)}</td></tr>` +
+        lines
+          .map((k) => {
+            const i = inv.get(k.item) || {},
+              issue = short.find((s) => s.name === k.item);
+            const notes = [i.inCase ? "Packed inside another case" : "", issue ? `<span class="warn">SHORT ${issue.short}: cross-hire</span>` : "", k.external ? "Hired in / custom line" : ""].filter(Boolean).join(" · ");
+            return `<tr><td class="box"><i></i></td><td class="box"><i></i></td><td class="num"><b>${k.qty}</b></td><td>${esc(k.item)}</td><td class="num">${hasNum(i.weightKg) ? kg(i.weightKg * k.qty) : ""}</td><td>${notes}</td></tr>`;
+          })
+          .join(""),
+    )
+    .join("");
+  const body = `${jobInfoGrid(j)}
+    <h2>Picking list</h2>
+    <table><thead><tr><th>Out</th><th>Back</th><th class="num">Qty</th><th>Equipment</th><th class="num">Weight</th><th>Notes</th></tr></thead><tbody>${rows || '<tr><td colspan="6">No equipment on this job yet.</td></tr>'}</tbody></table>
+    <p>${load.kg ? `<b>Total kit weight:</b> ${kg(load.kg)}${load.payload ? ` of ${kg(load.payload)} payload ${load.over ? '<span class="warn">OVERLOADED</span>' : '<span class="ok">OK</span>'}` : ""}` : ""}${load.unknown.length ? ` <span class="muted">(${load.unknown.length} line${load.unknown.length > 1 ? "s" : ""} without a weight)</span>` : ""}</p>
+    ${short.length ? `<h2>Shortages / cross-hire</h2><p>${short.map((s) => `<span class="warn">${esc(s.name)}: ${s.short} short</span>`).join("<br>")}</p>` : ""}
+    ${j.notes ? `<h2>Crew and technical notes</h2><div class="note">${esc(j.notes)}</div>` : ""}
+    <div class="sign"><div>Picked by / date</div><div>Checked out by / date</div><div>Returned and checked by / date</div></div>`;
+  return printDocument("Picking list", "Job " + j.id, body);
+}
+
+// Category totals for quotes and invoices (unit prices stay internal).
+function jobTotals(j) {
+  const totals = cats
+    .map((cat) => ({ name: cat, total: (j.kit || []).filter((k) => (k.category || "Audio") === cat).reduce((s, k) => s + (Number(k.qty) || 0) * (Number(k.price) || 0), 0) }))
+    .filter((x) => x.total > 0);
+  const sub = totals.reduce((s, x) => s + x.total, 0),
+    discount = Math.min(sub, Number(j.discount) || 0),
+    net = sub - discount;
+  const vat = db.company?.vatNumber ? Math.round(net * 20) / 100 : 0;
+  return { totals, sub, discount, net, vat, gross: net + vat };
+}
+function totalsTable(t) {
+  return `<table class="totals"><tbody>${t.discount ? `<tr><td>Subtotal</td><td class="num">${pMoney(t.sub)}</td></tr><tr><td>Discount</td><td class="num">−${pMoney(t.discount)}</td></tr>` : ""}
+    ${t.vat ? `<tr><td>Total ex VAT</td><td class="num">${pMoney(t.net)}</td></tr><tr><td>VAT at 20%</td><td class="num">${pMoney(t.vat)}</td></tr>` : ""}
+    <tr class="grand"><td>${t.vat ? "Total inc VAT" : "Total"}</td><td class="num">${pMoney(t.gross)}</td></tr></tbody></table>`;
+}
+function billTo(j) {
+  const c = jobClient(j);
+  return [c.company, c.name || j.client, c.address, c.email, c.phone].filter(Boolean).map(esc).join("<br>") || "Client details not entered";
+}
+
+// ---------- Quote ----------
 function printQuote(id) {
   const j = db.jobs.find((x) => String(x.id) === String(id));
-  if (!j) return;
-  const c = db.clients.find((x) => String(x.id) === String(j.clientId)) || {};
-  const info = db.company || {};
-  const lines = j.kit || [];
-  const totals = cats
-    .map((cat) => ({
-      name: cat,
-      total: lines
-        .filter((k) => (k.category || "Audio") === cat)
-        .reduce((sum, k) => sum + (Number(k.qty) || 0) * (Number(k.price) || 0), 0),
-    }))
-    .filter((x) => x.total > 0);
-  const total = Math.max(0, totals.reduce((sum, x) => sum + x.total, 0) - (Number(j.discount) || 0));
-  const field = (v) => esc(v || "");
-  const company = [info.name || "HD Events", info.address, info.email, info.phone, info.website]
-    .filter(Boolean)
-    .map(field)
-    .join("<br>");
-  const customer = [c.company, c.name || j.client, c.address, c.email, c.phone]
-    .filter(Boolean)
-    .map(field)
-    .join("<br>");
-  const markup = `<div class="print-sheet" style="font-family:Arial,sans-serif;color:#17202b;background:white;padding:30px;max-width:800px;margin:auto">
- <div style="display:flex;justify-content:space-between;gap:30px;border-bottom:2px solid #17202b;padding-bottom:20px">
- <div>${db.branding?.logo ? `<img src="${esc(db.branding.logo)}" style="max-height:75px;max-width:220px;object-fit:contain"><br>` : ""}<strong>${company}</strong></div><div style="text-align:right"><h1 style="margin:0">QUOTATION</h1><p>Reference: ${field(j.id)}</p><p>Date: ${new Date().toLocaleDateString("en-GB")}</p></div></div>
- <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:25px 0"><div><b>Prepared for</b><p style="line-height:1.6">${customer || "Client details not entered"}</p></div><div><b>Job details</b><p>${field(j.title)}<br>${field(j.venue)}<br>${field(j.start)} to ${field(j.end)}</p></div></div>
- <h2>Quotation summary</h2><table style="width:100%;border-collapse:collapse"><thead><tr><th style="text-align:left;border-bottom:1px solid #888;padding:12px">Service</th><th style="text-align:right;border-bottom:1px solid #888;padding:12px">Total</th></tr></thead><tbody>${totals.map((x) => `<tr><td style="padding:12px;border-bottom:1px solid #ddd">${field(x.name)}</td><td style="padding:12px;border-bottom:1px solid #ddd;text-align:right">${money(x.total)}</td></tr>`).join("")}<tr><th style="text-align:left;padding:14px">Total (excluding VAT, if applicable)</th><th style="text-align:right;padding:14px">${money(total)}</th></tr></tbody></table>
- <p style="margin-top:35px;font-size:12px">Draft quotation. VAT status, payment terms and company details must be verified before sending.</p></div>`;
-  const popup = window.open("", "_blank");
-  if (!popup) {
-    alert("Please allow pop-ups to open the quotation preview.");
-    return;
-  }
-  popup.document.open();
-  popup.document.write(
-    '<!doctype html><html><head><meta charset="utf-8"><title>HD Events quotation</title><style>body{margin:0;background:white;color:#17202b} .actions{padding:12px;background:#eef2f6;text-align:center}button{padding:10px 18px;cursor:pointer}@media print{.actions{display:none!important}@page{size:A4;margin:12mm}}</style></head><body><div class="actions"><button onclick="window.print()">Print / Save as PDF</button></div>' +
-      markup +
-      "</body></html>",
-  );
-  popup.document.close();
+  if (!j || !me.money) return;
+  const t = jobTotals(j),
+    info = db.company || {};
+  const body = `<div class="grid"><div><h3>Prepared for</h3>${billTo(j)}</div><div><h3>Event</h3>${esc(j.title)}<br>${esc(j.venue || "")}<br>${esc(fmtRange(j))}</div></div>
+    <h2>Quotation</h2><table><thead><tr><th>Service</th><th class="num">Price</th></tr></thead><tbody>${t.totals.map((x) => `<tr><td>${esc(x.name)}</td><td class="num">${pMoney(x.total)}</td></tr>`).join("") || '<tr><td colspan="2">No priced items yet.</td></tr>'}</tbody></table>
+    ${totalsTable(t)}
+    <div class="note">${info.vatNumber ? "Prices include VAT at 20% where shown." : "Prices shown are the total payable."} This quotation is valid for 30 days. Equipment is reserved only once the booking is confirmed.${info.paymentTerms ? "\n\nPayment terms: " + esc(info.paymentTerms) : ""}</div>`;
+  return printDocument("Quotation", "Ref " + j.id, body);
 }
-function printMarkup(markup) {
-  if (db.branding?.logo) {
-    markup =
-      `<div style="padding:8px 0 18px;border-bottom:2px solid #222;margin-bottom:16px"><img src="${esc(db.branding.logo)}" alt="HD Events logo" style="max-width:210px;max-height:85px;object-fit:contain"></div>` +
-      markup;
+
+// ---------- Invoice ----------
+function nextInvoiceNo() {
+  return db.jobs.reduce((m, j) => Math.max(m, Number(String(j.invoiceNo || "").replace(/\D/g, "")) || 0), 1000) + 1;
+}
+function printInvoice(id) {
+  const j = db.jobs.find((x) => String(x.id) === String(id));
+  if (!j || !me.owner) return;
+  if (!j.invoiceNo) {
+    if (!confirm(`Create invoice HD-${nextInvoiceNo()} for ${j.title}?\n\nThe invoice number and date are saved on the job, so reprints show the same invoice.`)) return;
+    j.invoiceNo = "HD-" + nextInvoiceNo();
+    j.invoiceDate = todayKey();
+    save();
+    render();
   }
-  let area = document.createElement("div");
-  area.id = "printArea";
-  area.style.display = "none";
-  area.innerHTML = markup;
-  document.body.appendChild(area);
-  let style = document.createElement("style");
-  style.id = "printStyle";
-  style.textContent = "@media print{body>.app{display:none!important}#printArea{display:block!important}}";
-  document.head.appendChild(style);
-  window.print();
-  setTimeout(() => {
-    area.remove();
-    style.remove();
-  }, 1200);
+  const info = db.company || {},
+    t = jobTotals(j);
+  const days = Number(info.paymentDays) || 30,
+    due = addDays(j.invoiceDate, days);
+  const body = `<div class="grid"><div><h3>Bill to</h3>${billTo(j)}</div><div><h3>Invoice details</h3><b>Invoice no.</b> ${esc(j.invoiceNo)}<br><b>Invoice date</b> ${esc(pDate(j.invoiceDate))}<br><b>Payment due</b> ${esc(pDate(due))} (${days} days)<br><b>Event</b> ${esc(j.title)}, ${esc(fmtRange(j))}</div></div>
+    <h2>Services</h2><table><thead><tr><th>Description</th><th class="num">Amount</th></tr></thead><tbody>${t.totals.map((x) => `<tr><td>${esc(x.name)}${j.venue ? " · " + esc(j.venue) : ""}</td><td class="num">${pMoney(x.total)}</td></tr>`).join("") || '<tr><td colspan="2">No priced items on this job.</td></tr>'}</tbody></table>
+    ${totalsTable(t)}
+    <h2>How to pay</h2><div class="note">${info.bankDetails ? esc(info.bankDetails) : '<span class="warn">Add your bank details under Branding before sending this invoice.</span>'}
+Please use ${esc(j.invoiceNo)} as the payment reference.${info.paymentTerms ? "\n" + esc(info.paymentTerms) : ""}${info.vatNumber ? "" : "\nNot VAT registered: no VAT has been charged."}</div>`;
+  return printDocument("Invoice", j.invoiceNo, body);
+}
+
+// ---------- Inventory ----------
+function printInventory() {
+  const byCat = {};
+  [...db.inventory].sort((a, b) => a.name.localeCompare(b.name)).forEach((i) => (byCat[i.category || "Other"] ||= []).push(i));
+  const t = inventoryTotals(db.inventory);
+  const cols = me.money ? 7 : 5;
+  const rows = Object.entries(byCat)
+    .sort()
+    .map(
+      ([cat, list]) =>
+        `<tr class="cat"><td colspan="${cols}">${esc(cat)} <span class="muted">(${list.length})</span></td></tr>` +
+        list
+          .map(
+            (i) =>
+              `<tr><td>${esc(i.name)}${i.inCase ? ' <span class="muted">(in a case)</span>' : ""}</td><td class="num">${i.qty}${i.service ? ` <span class="warn">(${i.service} out of service)</span>` : ""}</td><td>${i.lengthCm ? `${i.lengthCm}×${i.widthCm}×${i.heightCm} cm` : ""}</td><td class="num">${weightText(i)}</td><td class="num">${hasNum(i.weightKg) ? kg(i.weightKg * i.qty) : ""}</td>${me.money ? `<td class="num">${valueText(i)}</td><td class="num">${hasNum(i.value) ? pMoney(i.value * i.qty) : ""}</td>` : ""}</tr>`,
+          )
+          .join(""),
+    )
+    .join("");
+  const body = `<p><b>${t.lines}</b> equipment lines · <b>${t.units}</b> units · total weight <b>${kg(t.weight)}</b>${me.money ? ` · total value <b>${pMoney(t.value)}</b>` : ""}. ~ means an estimate.</p>
+    <table><thead><tr><th>Equipment</th><th class="num">Owned</th><th>Size (L×W×H)</th><th class="num">Weight each</th><th class="num">Total weight</th>${me.money ? '<th class="num">Value each</th><th class="num">Total value</th>' : ""}</tr></thead><tbody>${rows || `<tr><td colspan="${cols}">No equipment yet.</td></tr>`}</tbody></table>`;
+  return printDocument("Inventory", "", body);
+}
+
+// ---------- Event planner checklist ----------
+function printPlanChecklist(id) {
+  const p = db.plans.find((x) => x.id === id);
+  if (!p) return;
+  const pr = planProgress(p);
+  const stages = p.stages
+    .map(
+      (s) => `<h2 class="stage-h">${esc(s.name)}</h2><table><thead><tr><th>Done</th><th>Item</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead><tbody>${s.items
+        .map(
+          (i) =>
+            `<tr><td class="box">${i.status === "done" ? "✓" : i.status === "na" ? "–" : "<i></i>"}</td><td>${esc(i.title)}${i.cert ? ` <span class="muted">· certificate${i.files?.length ? " filed" : " needed"}</span>` : ""}${i.doc ? ` <span class="muted">· ${i.doc.status === "approved" ? "document approved" : "document draft"}</span>` : ""}</td><td>${esc(i.owner || "")}</td><td>${esc(pDate(i.due))}</td><td>${esc(STATUS_LABELS[i.status])}</td></tr>`,
+        )
+        .join("")}</tbody></table>`,
+    )
+    .join("");
+  const body = `<div class="grid"><div><b>Event</b> ${esc(p.title)}</div><div><b>Date</b> ${esc(pDate(p.eventDate))}${p.endDate ? " to " + esc(pDate(p.endDate)) : ""}</div><div><b>Venue</b> ${esc(p.venue || "")}</div><div><b>Capacity</b> ${p.capacity ? p.capacity.toLocaleString("en-GB") : ""}</div><div><b>Progress</b> ${pr.done} of ${pr.total} done (${pr.pct}%)</div></div>${stages}`;
+  return printDocument("Event checklist", p.title, body);
+}
+
+// ---------- Van load plan ----------
+function printLoadPlan() {
+  const j = db.jobs.find((x) => x.id === editingJob) || { title: "New job" };
+  const ids = document.getElementById("jobForm") ? chosenVehicles() : j.vehicleIds || [];
+  const vehicles = vehicleList().filter((v) => v.lengthCm && v.widthCm && v.heightCm);
+  const chosen = ids.length ? vehicles.filter((v) => ids.map(String).includes(String(v.id))) : vehicles.filter((v) => !planLoad(draftKit, db.inventory, [v]).left.length).slice(0, 1);
+  if (!chosen.length) return alert("Tick a vehicle with a load space size first.");
+  const names = [...new Set(draftKit.map((k) => k.item))];
+  const colourOf = (n) => LOAD_COLOURS[names.indexOf(n) % LOAD_COLOURS.length];
+  const plan = planLoad(draftKit, db.inventory, chosen);
+  const loads = plan.loads
+    .map(
+      (l) => `<h2>${esc(l.vehicle.name)}: ${l.placed.length} items · ${l.volumePct}% of the space · ${kg(l.kg)}${l.payload ? " of " + kg(l.payload) : ""}${l.over ? ' <span class="warn">OVER PAYLOAD</span>' : ""}</h2>
+      ${l.placed.length ? loadDrawing(l, colourOf) + "<h3>From above (numbers = height of load in cm)</h3>" + loadTopView(l, colourOf) : "<p>Nothing loaded.</p>"}
+      <h3>Loading order</h3><table><thead><tr><th>Loaded</th><th>#</th><th>Item</th></tr></thead><tbody>${loadOrder(l)
+        .map((o, n) => `<tr><td class="box"><i></i></td><td>${n + 1}</td><td><span class="swatch" style="background:${colourOf(o.name)}"></span>${o.n > 1 ? o.n + " × " : ""}${esc(o.name)}${o.onTop ? ' <span class="muted">(stacked on top)</span>' : ""}</td></tr>`)
+        .join("")}</tbody></table>`,
+    )
+    .join("");
+  const body = `<div class="grid"><div><b>Job</b> ${esc(j.title)}</div><div><b>Dates</b> ${esc(j.start ? fmtRange(j) : "")}</div></div>
+    ${plan.left.length ? `<p class="warn">Won't fit: ${summariseNames(plan.left)}</p>` : ""}${plan.noSize.length ? `<p class="muted">Not shown (no size yet): ${plan.noSize.map((x) => x.qty + " × " + esc(x.name)).join(", ")}</p>` : ""}${loads}
+    <p class="muted">Planning aid: wheel arches and odd shapes aren't modelled. Secure every load before travelling.</p>`;
+  return printDocument("Van load plan", j.title, body);
 }

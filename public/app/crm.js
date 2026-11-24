@@ -56,7 +56,7 @@ function filterContacts(q) {
 function clientAction() {
   let v = $("clientAction").value;
   if (v === "invoice") {
-    alert("Invoice workflow is not implemented yet. It will be linked to approved quotes.");
+    alert("Invoices are made from the job: open Jobs and press Invoice on the job card.");
     return;
   }
   newClientJob(activeClient);

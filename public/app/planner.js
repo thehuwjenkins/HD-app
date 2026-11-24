@@ -200,7 +200,7 @@ function findItem(p, id) {
 function planChecklist(p) {
   const today = todayKey();
   const staffNames = [approverName(), ...db.staff.map((m) => m.name)].filter(Boolean);
-  return `<datalist id="ownerNames">${staffNames.map((n) => `<option value="${esc(n)}">`).join("")}</datalist>` +
+  return `<div class="toolbar"><button class="btn small secondary" onclick="printPlanChecklist(${p.id})">Print checklist</button></div><datalist id="ownerNames">${staffNames.map((n) => `<option value="${esc(n)}">`).join("")}</datalist>` +
     p.stages
       .map((s) => {
         const live = s.items.filter((i) => i.status !== "na");

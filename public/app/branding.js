@@ -23,6 +23,11 @@ function branding() {
       ["phone", "Phone"],
       ["website", "Website"],
       ["approverName", "Approver for safety documents (full name)"],
+      ["companyNumber", "Company number (if a limited company)"],
+      ["vatNumber", "VAT number (leave blank if not VAT registered)"],
+      ["paymentDays", "Invoice payment terms in days (e.g. 30)"],
+      ["paymentTerms", "Payment terms wording for quotes and invoices"],
+      ["bankDetails", "Bank details for invoices (name, sort code, account)"],
     ]
       .map(
         ([key, label]) =>
