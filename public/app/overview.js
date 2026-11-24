@@ -51,7 +51,7 @@ function overview() {
       `${stageTag(j)} <button class="btn small secondary" onclick="openJob(${j.id})">Open</button>`,
     );
   return `
-  <div class="toolbar"><button class="btn" onclick="planDialog()">✦ Plan an Event</button><button class="btn secondary" onclick="newJob()">+ New job</button></div>
+  <div class="toolbar"><button class="btn" onclick="planDialog()">Plan an event</button><button class="btn secondary" onclick="newJob()">+ New job</button></div>
   <div class="next-action"><div><span class="muted">Next action</span><b>${title}</b><span class="muted">${detail}</span></div><button class="btn" onclick="${action}">${label}</button></div>
   <div class="stats">
     ${stat("This week", f.week.length, f.week.length ? fmtDay(f.wkFrom, { day: "numeric", month: "short" }) + " – " + fmtDay(f.wkTo, { day: "numeric", month: "short" }) : "No jobs this week", "go('Calendar')")}

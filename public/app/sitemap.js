@@ -1,22 +1,27 @@
 // Site map: satellite or street map of the venue, with stages, bars, toilets, fire points, fences and routes.
 // Uses Leaflet (loaded on first use) with Esri satellite imagery and OpenStreetMap; no API key needed.
 const SITE_KINDS = {
-  stage: ["🎤", "Stage"],
-  foh: ["🎛️", "FOH / control"],
-  bar: ["🍺", "Bar"],
-  food: ["🍔", "Food"],
-  toilets: ["🚻", "Toilets"],
-  water: ["💧", "Drinking water"],
-  firstaid: ["⛑️", "First aid"],
-  firepoint: ["🧯", "Fire point"],
-  exit: ["🚪", "Emergency exit"],
-  assembly: ["🟢", "Assembly point"],
-  entrance: ["🎟️", "Entrance"],
-  security: ["🛡️", "Security / control"],
-  generator: ["⚡", "Generator / power"],
-  info: ["ℹ️", "Info point"],
-  parking: ["🅿️", "Parking"],
-  camping: ["⛺", "Camping"],
+  // [short code, name, colour] (safety signs: green = safe condition, red = fire)
+  stage: ["ST", "Stage", "#5b21b6"],
+  foh: ["FOH", "FOH / control", "#5b21b6"],
+  bar: ["BAR", "Bar", "#b45309"],
+  food: ["F", "Food", "#b45309"],
+  toilets: ["WC", "Toilets", "#1d4ed8"],
+  water: ["W", "Drinking water", "#0369a1"],
+  firstaid: ["FA", "First aid", "#15803d"],
+  firepoint: ["FP", "Fire point", "#b91c1c"],
+  exit: ["EX", "Emergency exit", "#15803d"],
+  assembly: ["AP", "Assembly point", "#15803d"],
+  entrance: ["IN", "Entrance", "#0f766e"],
+  security: ["SEC", "Security / control", "#334155"],
+  generator: ["GEN", "Generator / power", "#a16207"],
+  info: ["i", "Info point", "#1d4ed8"],
+  parking: ["P", "Parking", "#1d4ed8"],
+  camping: ["C", "Camping", "#4d7c0f"],
+};
+const siteBadge = (k) => {
+  const [code, name, colour] = SITE_KINDS[k] || ["?", "Item", "#334155"];
+  return `<span class="pin-code" style="background:${colour}" aria-hidden="true" title="${name}">${code}</span>`;
 };
 const SITE_SHAPES = {
   arena: ["polygon", "#67d5ed", "Arena / audience area"],
@@ -68,10 +73,10 @@ function siteMap(p) {
   return `<div class="site-tools noprint">
     <form class="toolbar" onsubmit="siteSearch(event)"><input class="field" style="flex:1;min-width:200px" name="q" value="${esc(s.address || "")}" placeholder="Search an address or paste a Google Maps link"><button class="btn small">Find</button>
     <button type="button" class="btn small ${siteBase === "satellite" ? "" : "secondary"}" onclick="siteBase='satellite';planRefresh()">Satellite</button><button type="button" class="btn small ${siteBase === "map" ? "" : "secondary"}" onclick="siteBase='map';planRefresh()">Map</button>
-    <a class="btn small ghost" href="${esc(gmaps)}" target="_blank" rel="noopener">Open in Google Maps ↗</a></form>
+    <a class="btn small ghost" href="${esc(gmaps)}" target="_blank" rel="noopener">Open in Google Maps</a></form>
     <div class="palette" role="toolbar" aria-label="Add to the site plan">
-      <button class="${siteTool === null ? "on" : ""}" data-tool="" onclick="siteSetTool(null)" title="Move and edit">✋ Move</button>
-      ${Object.entries(SITE_KINDS).map(([k, [e, l]]) => `<button class="${siteTool === k ? "on" : ""}" data-tool="${k}" onclick="siteSetTool('${k}')" title="Place: ${l}">${e} ${l}</button>`).join("")}
+      <button class="${siteTool === null ? "on" : ""}" data-tool="" onclick="siteSetTool(null)" title="Move and edit">Move</button>
+      ${Object.entries(SITE_KINDS).map(([k, [e, l]]) => `<button class="${siteTool === k ? "on" : ""}" data-tool="${k}" onclick="siteSetTool('${k}')" title="Place: ${l}">${siteBadge(k)} ${l}</button>`).join("")}
       ${Object.entries(SITE_SHAPES).map(([k, [, c, l]]) => `<button class="${siteTool === k ? "on" : ""}" data-tool="${k}" onclick="siteSetTool('${k}')" title="Draw: ${l}"><span class="swatch" style="background:${c}"></span>${l}</button>`).join("")}
     </div>
     <p class="hint" id="siteHint">${siteHintText()}</p></div>
@@ -82,7 +87,7 @@ function siteMap(p) {
 function siteList(s) {
   return s.features.length
     ? s.features
-        .map((f, n) => row(`${SITE_KINDS[f.kind]?.[0] || `<span class="swatch" style="background:${SITE_SHAPES[f.kind]?.[1]}"></span>`} ${esc(f.label || SITE_KINDS[f.kind]?.[1] || SITE_SHAPES[f.kind]?.[2])}`, `<button class="btn small ghost" onclick="siteFocus(${n})">Show</button>`))
+        .map((f, n) => row(`${SITE_KINDS[f.kind] ? siteBadge(f.kind) : `<span class="swatch" style="background:${SITE_SHAPES[f.kind]?.[1]}"></span>`} ${esc(f.label || SITE_KINDS[f.kind]?.[1] || SITE_SHAPES[f.kind]?.[2])}`, `<button class="btn small ghost" onclick="siteFocus(${n})">Show</button>`))
         .join("")
     : '<p class="hint">Nothing placed yet. Pick an item above, then click on the map.</p>';
 }
@@ -118,7 +123,7 @@ function siteChecks(s) {
     ["water", "Drinking water"],
     ["entrance", "Entrance"],
   ];
-  return checks.map(([k, l]) => `<div class="check-row">${has(k) ? "✅" : "⬜"} ${l}</div>`).join("") + '<p class="hint">A prompt list, not a full assessment. The event risk assessment and fire risk assessment decide what the site needs.</p>';
+  return checks.map(([k, l]) => `<div class="check-row"><span class="check-mark ${has(k) ? "ok" : ""}">${has(k) ? "✓" : ""}</span> ${l}</div>`).join("") + '<p class="hint">A prompt list, not a full assessment. The event risk assessment and fire risk assessment decide what the site needs.</p>';
 }
 function siteSetTool(t) {
   siteTool = t;
@@ -188,8 +193,7 @@ function drawFeature(layer, p, f, n) {
     return div;
   };
   if (f.type === "marker") {
-    const [emoji] = SITE_KINDS[f.kind] || ["📍"];
-    const m = L.marker(f.at, { draggable: true, title: f.label || SITE_KINDS[f.kind]?.[1], icon: L.divIcon({ className: "site-pin", html: `<span>${emoji}</span>${f.label ? `<b>${esc(f.label)}</b>` : ""}`, iconSize: [34, 34], iconAnchor: [17, 17] }) }).addTo(layer);
+    const m = L.marker(f.at, { draggable: true, title: f.label || SITE_KINDS[f.kind]?.[1], icon: L.divIcon({ className: "site-pin", html: `${siteBadge(f.kind)}${f.label ? `<b>${esc(f.label)}</b>` : ""}`, iconSize: [34, 34], iconAnchor: [17, 17] }) }).addTo(layer);
     m.bindPopup(popup);
     m.on("dragend", () => {
       const ll = m.getLatLng();

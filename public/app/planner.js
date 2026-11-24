@@ -72,12 +72,12 @@ function planner() {
         nd = nextDue(p),
         cover = planCover(p);
       return `<button class="plan-card" onclick="openPlan(${p.id})">
-        <div class="plan-cover" ${cover ? `style="background-image:url('${esc(cover)}')"` : ""}>${cover ? "" : "<span>✦</span>"}</div>
+        <div class="plan-cover" ${cover ? `style="background-image:url('${esc(cover)}')"` : ""}>${cover ? "" : "<span>HD</span>"}</div>
         <div class="plan-body">${ring(pr.pct)}<div><b>${esc(p.title)}</b><span class="muted">${p.eventDate ? esc(fmtDay(p.eventDate, { weekday: "short", day: "numeric", month: "short", year: "numeric" })) : "Date not set"} · ${countdown(p.eventDate)}</span>
-        <span class="muted">${nd ? "Next: " + esc(nd.title) + " · " + fmtDay(nd.due) : pr.total ? "All items done 🎉" : ""}</span></div></div></button>`;
+        <span class="muted">${nd ? "Next: " + esc(nd.title) + " · " + fmtDay(nd.due) : pr.total ? "All items done" : ""}</span></div></div></button>`;
     })
     .join("");
-  return `<div class="plan-hero"><div><h2>Plan an event</h2><p>Start from a template, sketch the site on a satellite map, build a moodboard, design the poster, and get every safety document drafted and signed off.</p></div><button class="btn big" onclick="planDialog()">✦ Plan an Event</button></div>
+  return `<div class="plan-hero"><div><h2>Plan an event</h2><p>Start from a template, sketch the site on a satellite map, build a moodboard, design the poster, and get every safety document drafted and signed off.</p></div><button class="btn big" onclick="planDialog()">Plan an event</button></div>
   ${plans.length ? `<div class="plan-grid">${cards}</div>` : '<p class="empty">No event plans yet. Press <b>Plan an Event</b> to start one.</p>'}`;
 }
 function openPlan(id) {
@@ -94,7 +94,7 @@ function planDialog(jobId) {
   const root = document.createElement("div");
   root.className = "modal";
   root.id = "planDialog";
-  root.innerHTML = `<form class="panel" onsubmit="createPlan(event)"><div class="line"><h2 style="margin:0">✦ Plan an Event</h2><button type="button" class="btn small ghost" onclick="$('planDialog').remove()">Close</button></div>
+  root.innerHTML = `<form class="panel" onsubmit="createPlan(event)"><div class="line"><h2 style="margin:0">Plan an event</h2><button type="button" class="btn small ghost" onclick="$('planDialog').remove()">Close</button></div>
     <div class="form" style="margin-top:14px">
       <label class="wide"><span class="muted">Event name</span><input class="field" name="title" required value="${esc(job?.title || "")}" placeholder="e.g. Aberravon Beach Fest 2027"></label>
       <label><span class="muted">Event date (first show day)</span><input class="field" type="date" name="eventDate" value="${esc(jobDays(job || {})?.[0] || "")}"></label>
@@ -103,7 +103,7 @@ function planDialog(jobId) {
       <label><span class="muted">Expected capacity</span><input class="field" type="number" min="0" name="capacity" placeholder="e.g. 3000"></label>
       <label><span class="muted">Template</span><select class="field" name="template">${Object.entries(PLAN_TEMPLATES).map(([k, t]) => `<option value="${k}">${esc(t.name)}</option>`).join("")}</select></label>
       <fieldset class="wide profile-q"><legend>What's happening at this event? <span class="muted">Tick everything that applies. The checklist adds the licences, certificates and safety documents each one needs.</span></legend>
-        <div class="profile-grid">${PLAN_PROFILE.map(([k, l, i]) => `<label class="check-card"><input type="checkbox" name="pf_${k}"><span aria-hidden="true">${i}</span> ${esc(l)}</label>`).join("")}</div></fieldset>
+        <div class="profile-grid">${PLAN_PROFILE.map(([k, l]) => `<label class="check-card"><input type="checkbox" name="pf_${k}"> ${esc(l)}</label>`).join("")}</div></fieldset>
       <label class="wide"><span class="muted">Job</span><select class="field" name="jobId"><option value="">Create a new job (as an enquiry)</option>${free.map((j) => `<option value="${j.id}" ${j.id === jobId ? "selected" : ""}>${esc(j.title)} · ${esc(fmtRange(j))}</option>`).join("")}</select><span class="hint">The plan is linked to a job, so kit, crew and the pipeline stay in step.</span></label>
     </div><button class="btn big" type="submit">Create plan</button></form>`;
   document.body.appendChild(root);
@@ -138,19 +138,19 @@ function createPlan(e) {
   db.plans.push(plan);
   save();
   $("planDialog")?.remove();
-  toast("✦ Plan created for <b>" + esc(plan.title) + "</b>. Let's build it!");
+  toast("Plan created for <b>" + esc(plan.title) + "</b>");
   openPlan(plan.id);
 }
 
 // ---------- Workspace ----------
 const PLAN_TABS = [
-  ["checklist", "Checklist", "☑"],
-  ["site", "Site map", "🗺️"],
-  ["creative", "Creative", "🎨"],
-  ["posters", "Posters", "🖼️"],
-  ["docs", "Safety documents", "📄"],
-  ["suppliers", "Suppliers & power", "⚡"],
-  ["compliance", "Compliance", "🛡️"],
+  ["checklist", "Checklist"],
+  ["site", "Site map"],
+  ["creative", "Creative"],
+  ["posters", "Posters"],
+  ["docs", "Safety documents"],
+  ["suppliers", "Suppliers & power"],
+  ["compliance", "Compliance"],
 ];
 function planWorkspace(p) {
   const pr = planProgress(p),
@@ -162,7 +162,7 @@ function planWorkspace(p) {
   <div class="plan-head">${ring(pr.pct, 72)}<div class="grow"><h2>${esc(p.title)}</h2><div class="muted">${p.eventDate ? esc(fmtDay(p.eventDate, { weekday: "long", day: "numeric", month: "long", year: "numeric" })) : "Date not set"}${p.venue ? " · " + esc(p.venue) : ""}${p.capacity ? " · " + p.capacity.toLocaleString("en-GB") + " capacity" : ""}</div>
   <div class="toolbar" style="margin:8px 0 0">${job ? stageTag(job) + ` <button class="btn small secondary" onclick="openJob(${job.id})">Open job</button>` : ""}<button class="btn small ghost" onclick="editPlanDetails()">Edit details</button><button class="btn small ghost" onclick="profileDialog()">Event profile</button></div></div>
   <div class="countdown"><b>${countdown(p.eventDate)}</b><span>${pr.done} of ${pr.total} done · ${approved}/${docs.length} documents approved</span></div></div>
-  <div class="tabs" role="tablist">${PLAN_TABS.map(([k, l, i]) => `<button role="tab" aria-selected="${k === plannerTab}" class="${k === plannerTab ? "active" : ""}" onclick="plannerTab='${k}';render()"><span aria-hidden="true">${i}</span> ${l}</button>`).join("")}</div>
+  <div class="tabs" role="tablist">${PLAN_TABS.map(([k, l]) => `<button role="tab" aria-selected="${k === plannerTab}" class="${k === plannerTab ? "active" : ""}" onclick="plannerTab='${k}';render()">${l}</button>`).join("")}</div>
   <div id="planBody">${body(p)}</div>`;
 }
 function editPlanDetails() {
@@ -212,29 +212,29 @@ function planChecklist(p) {
             const open = plannerOpen.has(i.id);
             return `<div class="item ${i.status}"><div class="item-row">
             <button class="status-btn" data-status="${i.status}" onclick="cycleItem(${i.id})" title="${STATUS_LABELS[i.status]}: click to change" aria-label="${esc(i.title)}: ${STATUS_LABELS[i.status]}">${{ todo: "", doing: "◐", done: "✓", na: "–" }[i.status]}</button>
-            <button class="item-title" onclick="toggleItem(${i.id})" aria-expanded="${open}">${esc(i.title)}${i.doc ? ` <span class="tag ${i.doc.status === "approved" ? "success" : "warning"}">${i.doc.status === "approved" ? "Approved" : "Draft: needs review"}</span>` : ""}${i.cert ? ` <span class="tag cert ${i.files?.length ? "success" : ""}" title="Certificate or evidence to file">${i.files?.length ? "📎 Filed" : "Certificate"}</span>` : i.files?.length ? ` <span class="muted">📎${i.files.length}</span>` : ""}</button>
+            <button class="item-title" onclick="toggleItem(${i.id})" aria-expanded="${open}">${esc(i.title)}${i.doc ? ` <span class="tag ${i.doc.status === "approved" ? "success" : "warning"}">${i.doc.status === "approved" ? "Approved" : "Draft: needs review"}</span>` : ""}${i.cert ? ` <span class="tag cert ${i.files?.length ? "success" : ""}" title="Certificate or evidence to file">${i.files?.length ? "Filed" : "Certificate"}</span>` : i.files?.length ? ` <span class="muted">${i.files.length} file${i.files.length > 1 ? "s" : ""}</span>` : ""}</button>
             ${i.owner ? `<span class="chip small">${esc(i.owner)}</span>` : ""}${i.due ? `<span class="tag ${late ? "warning" : ""}">${late ? "Overdue · " : ""}${fmtDay(i.due, { day: "numeric", month: "short" })}</span>` : ""}</div>
             ${open ? itemDetails(p, i) : ""}</div>`;
           })
           .join("");
-        return `<details class="stage-box" ${pct < 100 || !live.length ? "open" : ""}><summary><span class="stage-ico" aria-hidden="true">${s.icon}</span><b>${esc(s.name)}</b><span class="muted">${done}/${live.length}</span><span class="bar"><span style="width:${pct}%"></span></span></summary>
+        return `<details class="stage-box" ${pct < 100 || !live.length ? "open" : ""}><summary><b>${esc(s.name)}</b><span class="muted">${done}/${live.length}</span><span class="bar"><span style="width:${pct}%"></span></span></summary>
         ${items}<form class="add-item" onsubmit="addItem(event,'${s.key}')"><input class="field" name="title" placeholder="+ Add an item to ${esc(s.name)}" aria-label="Add an item to ${esc(s.name)}"><button class="btn small secondary">Add</button></form></details>`;
       })
       .join("");
 }
 function itemDetails(p, i) {
-  const link = { creative: ["🎨 Open creative board", "plannerTab='creative';render()"], posters: ["🖼️ Open poster studio", "plannerTab='posters';render()"], site: ["🗺️ Open site map", "plannerTab='site';render()"], suppliers: ["🤝 Open suppliers & power", "plannerTab='suppliers';render()"], job: ["Open job", `openJob(${p.jobId})`], crosshire: ["Open cross-hire", "go('Cross-hire')"] }[i.link];
+  const link = { creative: ["Open creative board", "plannerTab='creative';render()"], posters: ["Open poster studio", "plannerTab='posters';render()"], site: ["Open site map", "plannerTab='site';render()"], suppliers: ["Open suppliers & power", "plannerTab='suppliers';render()"], job: ["Open job", `openJob(${p.jobId})`], crosshire: ["Open cross-hire", "go('Cross-hire')"] }[i.link];
   return `<div class="item-details">
     ${i.why ? `<div class="why"><b>Why this matters</b><p>${esc(i.why)}</p></div>` : ""}
-    ${i.cert ? `<p class="hint">📎 Attach the certificate or evidence here so it goes into the compliance pack.</p>` : ""}
+    ${i.cert ? `<p class="hint">Attach the certificate or evidence here so it goes into the compliance pack.</p>` : ""}
     <div class="form">
       <label><span class="muted">Status</span><select class="field" onchange="setItem(${i.id},'status',this.value)">${PLAN_STATUSES.map((s) => `<option value="${s}" ${s === i.status ? "selected" : ""}>${STATUS_LABELS[s]}</option>`).join("")}</select></label>
       <label><span class="muted">Owner</span><input class="field" list="ownerNames" value="${esc(i.owner)}" onchange="setItem(${i.id},'owner',this.value)" placeholder="Who's doing it?"></label>
       <label><span class="muted">Deadline</span><input class="field" type="date" value="${esc(i.due)}" onchange="setItem(${i.id},'due',this.value)"></label>
       <label class="wide"><span class="muted">Notes</span><textarea class="field" rows="3" onchange="setItem(${i.id},'notes',this.value)" placeholder="Contacts, references, decisions…">${esc(i.notes)}</textarea></label>
     </div>
-    <div class="files">${(i.files || []).map((f, n) => `<span class="file"><a href="${esc(f.url)}" target="_blank" rel="noopener">📎 ${esc(f.name)}</a> <button class="btn small ghost" onclick="removeItemFile(${i.id},${n})" aria-label="Remove ${esc(f.name)}">×</button></span>`).join("")}</div>
-    <div class="toolbar"><button class="btn small secondary" onclick="attachToItem(${i.id})">📎 Attach file</button>${link ? `<button class="btn small secondary" onclick="${link[1]}">${link[0]}</button>` : ""}${i.doc ? `<button class="btn small secondary" onclick="plannerTab='docs';render()">📄 Open document</button>` : ""}<button class="btn small danger" onclick="deleteItem(${i.id})">Delete item</button></div>
+    <div class="files">${(i.files || []).map((f, n) => `<span class="file"><a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.name)}</a> <button class="btn small ghost" onclick="removeItemFile(${i.id},${n})" aria-label="Remove ${esc(f.name)}">×</button></span>`).join("")}</div>
+    <div class="toolbar"><button class="btn small secondary" onclick="attachToItem(${i.id})">Attach file</button>${link ? `<button class="btn small secondary" onclick="${link[1]}">${link[0]}</button>` : ""}${i.doc ? `<button class="btn small secondary" onclick="plannerTab='docs';render()">Open document</button>` : ""}<button class="btn small danger" onclick="deleteItem(${i.id})">Delete item</button></div>
   </div>`;
 }
 function toggleItem(id) {
@@ -263,8 +263,8 @@ function stageComplete(s) {
 function celebrate(p, stage, wasDone) {
   if (!wasDone && stageComplete(stage)) {
     const pr = planProgress(p);
-    if (pr.pct === 100) toast("🎉🎉 Everything's done for <b>" + esc(p.title) + "</b>. Have a brilliant event!");
-    else toast("🎉 <b>" + esc(stage.name) + "</b> complete! " + pr.pct + "% of the plan done.");
+    if (pr.pct === 100) toast("Everything's done for <b>" + esc(p.title) + "</b>. Have a brilliant event!");
+    else toast("<b>" + esc(stage.name) + "</b> complete! " + pr.pct + "% of the plan done.");
   }
 }
 function addItem(e, key) {
@@ -354,7 +354,7 @@ function planDocuments(p) {
           ok = d.status === "approved";
         return `<div class="panel doc ${ok ? "approved" : "draft"}"><div class="line" style="border:0;padding-top:0"><div><span class="muted">${DOC_LABELS[d.kind]}</span><h2 style="margin:0">${esc(i.title)}</h2></div><span class="tag ${ok ? "success" : "warning"}">${ok ? "✓ Approved by " + esc(d.approval.by) + " · " + hqWhen(d.approval.at) : "Draft: needs review"}</span></div>
         ${ok ? `<pre class="doc-text">${esc(d.content)}</pre>` : `<textarea class="field doc-text" rows="14" onchange="setDocText(${i.id},this.value)" aria-label="${esc(i.title)} text">${esc(d.content || DOC_SKELETONS[d.kind])}</textarea>`}
-        <div class="toolbar" style="margin-top:10px">${ok ? `<button class="btn small secondary" onclick="unapproveDoc(${i.id})">Edit (withdraws approval)</button>` : `<button class="btn small" onclick="approveDoc(${i.id})" ${name ? "" : "disabled"}>✓ Approve as ${esc(name || "…")}</button><button class="btn small ghost" disabled title="Coming next: Claude drafts this from the event details and your past documents">✨ Draft with AI (coming next)</button>`}<button class="btn small secondary" onclick="printDoc(${i.id})">Print / PDF</button></div></div>`;
+        <div class="toolbar" style="margin-top:10px">${ok ? `<button class="btn small secondary" onclick="unapproveDoc(${i.id})">Edit (withdraws approval)</button>` : `<button class="btn small" onclick="approveDoc(${i.id})" ${name ? "" : "disabled"}>✓ Approve as ${esc(name || "…")}</button><button class="btn small ghost" disabled title="Coming next: Claude drafts this from the event details and your past documents">Draft with AI (coming next)</button>`}<button class="btn small secondary" onclick="printDoc(${i.id})">Print / PDF</button></div></div>`;
       })
       .join("") || '<p class="empty">This plan has no safety documents. Add one from the checklist.</p>') +
     `<div class="toolbar"><button class="btn small secondary" onclick="addDoc()">+ Add a document</button></div>`
@@ -403,8 +403,8 @@ function addDoc() {
   const p = currentPlan();
   let stage = p.stages.find((s) => s.key === DOC_STAGE[kind]) || p.stages.find((s) => s.key === "safety");
   if (!stage) {
-    const [key, name, icon] = PLAN_STAGES.find(([k]) => k === DOC_STAGE[kind]);
-    stage = { key, name, icon, items: [] };
+    const [key, name] = PLAN_STAGES.find(([k]) => k === DOC_STAGE[kind]);
+    stage = { key, name, items: [] };
     p.stages.push(stage);
   }
   stage.items.push({ id: uid(), title, status: "todo", owner: "", due: "", notes: "", files: [], doc: { kind, content: "", status: "draft" } });

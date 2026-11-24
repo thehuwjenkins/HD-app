@@ -27,7 +27,7 @@ function calendar() {
         .join("");
       const cls = [d.slice(0, 7) !== calMonth && "other", d === today && "today", d === calDay && "selected"].filter(Boolean).join(" ");
       const deadlines = db.plans.reduce((n, p) => n + p.stages.reduce((m, s) => m + s.items.filter((i) => i.due === d && i.status !== "done" && i.status !== "na").length, 0), 0);
-      return `<button class="cal-day ${cls}" onclick="calDay='${d}';render()" aria-label="${fmtDay(d, { weekday: "long", day: "numeric", month: "long" })}, ${on.length} job(s)"><span class="num">${Number(d.slice(8))}${deadlines ? ` <span class="due-dot" title="${deadlines} planner deadline(s)">✦${deadlines}</span>` : ""}</span>${bars}${on.length > 3 ? `<span class="cal-more">+${on.length - 3} more</span>` : ""}</button>`;
+      return `<button class="cal-day ${cls}" onclick="calDay='${d}';render()" aria-label="${fmtDay(d, { weekday: "long", day: "numeric", month: "long" })}, ${on.length} job(s)"><span class="num">${Number(d.slice(8))}${deadlines ? ` <span class="due-dot" title="${deadlines} planner deadline(s)">${deadlines} due</span>` : ""}</span>${bars}${on.length > 3 ? `<span class="cal-more">+${on.length - 3} more</span>` : ""}</button>`;
     })
     .join("");
   const monthName = fmtDay(first, { month: "long", year: "numeric" });

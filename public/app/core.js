@@ -27,11 +27,11 @@ let activeClient = null;
 let editingJob = null;
 let draftKit = [];
 let tab = "Overview";
-// Navigation, grouped. [name, icon]
+// Navigation, grouped. [name]
 const navGroups = [
-  ["Work", [["Overview", "◫"], ["Event Planner", "✦"], ["Pipeline", "⇶"], ["Calendar", "▦"], ["Jobs", "▤"], ["My Workday", "☑"]]],
-  ["Resources", [["Inventory", "▣"], ["Packages", "◰"], ["Cross-hire", "⚠"], ["Staff", "♟"], ["Crew Portal", "☷"]]],
-  ["Business", [["CRM", "♙"], ["Projects", "◇"], ["Branding", "◈"]]],
+  ["Work", [["Overview"], ["Event Planner"], ["Pipeline"], ["Calendar"], ["Jobs"], ["My Workday"]]],
+  ["Resources", [["Inventory"], ["Packages"], ["Cross-hire"], ["Staff"], ["Crew Portal"]]],
+  ["Business", [["CRM"], ["Projects"], ["Branding"]]],
 ];
 const tabs = navGroups.flatMap(([, items]) => items);
 const $ = (id) => document.getElementById(id);
@@ -75,8 +75,8 @@ function render() {
         `<div class="nav-group">${group}</div>` +
         items
           .map(
-            ([n, i]) =>
-              `<button class="nav ${n === tab ? "active" : ""}" ${n === tab ? 'aria-current="page"' : ""} onclick="go('${n}')"><span class="ico" aria-hidden="true">${i}</span>${n}${n === "Cross-hire" && shortCount ? `<span class="count">${shortCount}</span>` : ""}</button>`,
+            ([n]) =>
+              `<button class="nav ${n === tab ? "active" : ""}" ${n === tab ? 'aria-current="page"' : ""} onclick="go('${n}')">${n}${n === "Cross-hire" && shortCount ? `<span class="count">${shortCount}</span>` : ""}</button>`,
           )
           .join(""),
     )

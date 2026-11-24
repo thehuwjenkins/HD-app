@@ -1,15 +1,15 @@
 function equipmentImage(i) {
   let photo = String(i.photo || "").trim();
   return /^https:\/\//i.test(photo) || /^\/files\/equipment\//.test(photo)
-    ? `<img src="${esc(photo)}" alt="${esc(i.name)}" loading="lazy" onerror="this.replaceWith(document.createTextNode('📦'))">`
-    : "📦";
+    ? `<img src="${esc(photo)}" alt="${esc(i.name)}" loading="lazy" onerror="this.replaceWith(document.createTextNode('No photo'))">`
+    : '<span class="no-photo">No photo</span>';
 }
 function equipmentCard(i, add) {
   return `<div class="equipment-card"><div class="equipment-photo">${equipmentImage(i)}</div><div class="equipment-body"><strong>${esc(i.name)}</strong><div class="muted">${Number(i.qty) || 0} owned · ${money(i.price)}</div>${add ? `<button class="btn secondary" type="button" onclick="addKitById(${i.id})">+ Add to job</button>` : `<button class="btn secondary" type="button" onclick="adjustStock(${i.id})">Edit stock</button> <button class="btn secondary" onclick="editEquipmentPhoto(${i.id})">Edit picture</button> <button class="btn secondary" onclick="pickEquipmentPhoto(${i.id})">Upload picture</button>`}</div></div>`;
 }
 function inventory() {
   let matches = db.inventory.filter((i) => i.name.toLowerCase().includes(inventoryQuery.toLowerCase()));
-  let content = `<div class="inventory-tools"><input class="field" placeholder="Search kit by name..." value="${esc(inventoryQuery)}" oninput="inventoryQuery=this.value;updateInventoryResults()"><div class="view-switch"><button class="btn secondary ${inventoryView === "grid" ? "active" : ""}" onclick="inventoryView='grid';updateInventoryResults()">▦ Grid</button><button class="btn secondary ${inventoryView === "list" ? "active" : ""}" onclick="inventoryView='list';updateInventoryResults()">☰ List</button></div></div><div id="inventoryResults">${inventoryResults(matches)}</div>`;
+  let content = `<div class="inventory-tools"><input class="field" placeholder="Search kit by name..." value="${esc(inventoryQuery)}" oninput="inventoryQuery=this.value;updateInventoryResults()"><div class="view-switch"><button class="btn secondary ${inventoryView === "grid" ? "active" : ""}" onclick="inventoryView='grid';updateInventoryResults()">Grid</button><button class="btn secondary ${inventoryView === "list" ? "active" : ""}" onclick="inventoryView='list';updateInventoryResults()">List</button></div></div><div id="inventoryResults">${inventoryResults(matches)}</div>`;
   return panel(
     "Kit / Inventory",
     content +

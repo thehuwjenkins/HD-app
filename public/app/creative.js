@@ -35,17 +35,17 @@ function creativeBoard(p) {
       <label><span class="muted">Colour palette</span><div class="palette-row">${c.palette.map((col, n) => `<input type="color" value="${esc(col)}" aria-label="Colour ${n + 1}" onchange="setPalette(${n},this.value)">`).join("")}</div></label>
       <label class="wide"><span class="muted">Notes, ideas, references</span><textarea class="field" rows="4" onchange="setCreative('notes',this.value)" placeholder="Headliners, activities, partners, look and feel…">${esc(c.notes || "")}</textarea></label>
     </div></div>
-    <div class="panel ai-panel"><h2>✨ Imagine it</h2><p class="hint">Describe a scene and the AI will picture it. Good for selling the idea to a client or the council, and for planning the look.</p>
+    <div class="panel ai-panel"><h2>Imagine it</h2><p class="hint">Describe a scene and the AI will picture it. Good for selling the idea to a client or the council, and for planning the look.</p>
       <div class="chips">${VISUAL_IDEAS.map(([l, t]) => `<button class="chip" onclick="$('aiPrompt').value=${esc(JSON.stringify(t + ", " + creativeContext(p) + ", photorealistic event photography"))}">${l}</button>`).join("")}</div>
       <textarea id="aiPrompt" class="field" rows="4" placeholder="e.g. Aerial drone photo of a beach festival at sunset, main stage facing the sea, festoon-lit bar village, 3,000 people">${esc(VISUAL_IDEAS[0][1] + ", " + creativeContext(p) + ", photorealistic event photography")}</textarea>
-      <div class="toolbar" style="margin-top:10px"><button class="btn" id="aiGo" onclick="imagineIt()" ${aiBusy ? "disabled" : ""}>${aiBusy ? "Imagining…" : "✨ Generate image"}</button><button class="btn secondary" onclick="addMoodImage()">⬆ Upload an image</button></div>
+      <div class="toolbar" style="margin-top:10px"><button class="btn" id="aiGo" onclick="imagineIt()" ${aiBusy ? "disabled" : ""}>${aiBusy ? "Imagining…" : "Generate image"}</button><button class="btn secondary" onclick="addMoodImage()">Upload an image</button></div>
       <p class="hint">AI images are concept art: an impression of the idea, not a design for building.</p></div>
   </div>
   <div class="panel"><h2>Moodboard</h2>${
     c.images.length
       ? `<div class="mood-grid">${c.images
           .map(
-            (im, n) => `<figure><img src="${esc(im.url)}" alt="${esc(im.prompt || "Moodboard image")}" loading="lazy"><figcaption>${im.kind === "ai" ? "✨ " : ""}${esc((im.prompt || im.name || "").slice(0, 90))}</figcaption>
+            (im, n) => `<figure><img src="${esc(im.url)}" alt="${esc(im.prompt || "Moodboard image")}" loading="lazy"><figcaption>${im.kind === "ai" ? "AI: " : ""}${esc((im.prompt || im.name || "").slice(0, 90))}</figcaption>
           <div class="toolbar"><button class="btn small secondary" onclick="newPoster('${esc(im.url)}')">Use on a poster</button><a class="btn small ghost" href="${esc(im.url)}" download>Download</a><button class="btn small danger" onclick="removeMood(${n})" aria-label="Remove image">×</button></div></figure>`,
           )
           .join("")}</div>`
@@ -71,7 +71,7 @@ async function imagineIt() {
     const url = await aiImage(prompt);
     p.creative.images.unshift({ url, prompt, kind: "ai", at: new Date().toISOString() });
     save();
-    toast("✨ New image added to the moodboard");
+    toast("New image added to the moodboard");
   } catch (e) {
     alert("No image this time. " + e.message);
   }
@@ -148,12 +148,12 @@ function posterStudio(p) {
   return `<div class="toolbar">${p.posters.map((q, n) => `<button class="btn small ${n === posterIdx ? "" : "secondary"}" onclick="posterIdx=${n};planRefresh()">${esc(q.title || "Poster " + (n + 1)).slice(0, 24)}${q.exported ? " ✓" : ""}</button>`).join("")}<button class="btn small ghost" onclick="newPoster()">+ New</button></div>
   <div class="poster-studio">
     <div class="poster-stage"><canvas id="posterCanvas" aria-label="Poster preview"></canvas>
-      <div class="toolbar" style="margin-top:10px"><button class="btn" onclick="posterDownload()">⬇ Download PNG</button><button class="btn secondary" onclick="posterSave()">Save to plan</button><button class="btn small ghost" onclick="posterDuplicate()">Duplicate</button><button class="btn small danger" onclick="posterDelete()">Delete</button></div>
+      <div class="toolbar" style="margin-top:10px"><button class="btn" onclick="posterDownload()">Download PNG</button><button class="btn secondary" onclick="posterSave()">Save to plan</button><button class="btn small ghost" onclick="posterDuplicate()">Duplicate</button><button class="btn small danger" onclick="posterDelete()">Delete</button></div>
       ${x.exported ? `<p class="hint">Saved copy: <a href="${esc(x.exported)}" target="_blank" rel="noopener">open</a></p>` : ""}</div>
     <div>
-      <div class="panel ai-panel"><h2>✨ Artwork</h2><div class="chips">${ART_IDEAS.map(([l, t]) => `<button class="chip" onclick="$('artPrompt').value=${esc(JSON.stringify(t))}">${l}</button>`).join("")}</div>
+      <div class="panel ai-panel"><h2>Artwork</h2><div class="chips">${ART_IDEAS.map(([l, t]) => `<button class="chip" onclick="$('artPrompt').value=${esc(JSON.stringify(t))}">${l}</button>`).join("")}</div>
         <textarea id="artPrompt" class="field" rows="3" placeholder="Describe the artwork, e.g. retro surf poster illustration with a big sun over the waves">${esc(x.prompt || "")}</textarea>
-        <div class="toolbar" style="margin-top:8px"><button class="btn" onclick="posterArt()" ${aiBusy ? "disabled" : ""}>${aiBusy ? "Creating…" : "✨ Generate artwork"}</button><button class="btn secondary" onclick="posterUpload()">⬆ Upload</button>${x.bg ? `<button class="btn small ghost" onclick="posterSet('bg','')">Plain background</button>` : ""}</div>
+        <div class="toolbar" style="margin-top:8px"><button class="btn" onclick="posterArt()" ${aiBusy ? "disabled" : ""}>${aiBusy ? "Creating…" : "Generate artwork"}</button><button class="btn secondary" onclick="posterUpload()">Upload</button>${x.bg ? `<button class="btn small ghost" onclick="posterSet('bg','')">Plain background</button>` : ""}</div>
         ${images.length ? `<div class="thumbs">${images.map((u) => `<button onclick="posterSet('bg','${esc(u)}')" class="${u === x.bg ? "on" : ""}" aria-label="Use this image"><img src="${esc(u)}" alt=""></button>`).join("")}</div>` : ""}
         <p class="hint">The AI makes the picture only. Your text is added by the app, so it's always spelt right.</p></div>
       <div class="panel"><h2>Words</h2><div class="form">
@@ -193,7 +193,7 @@ async function posterArt() {
     delete x.exported;
     p.creative.images.unshift({ url, prompt, kind: "ai", at: new Date().toISOString() });
     save();
-    toast("✨ Artwork ready");
+    toast("Artwork ready");
   } catch (e) {
     alert("No artwork this time. " + e.message);
   }
@@ -383,7 +383,7 @@ async function posterSave() {
   try {
     x.exported = await uploadImage(new File([blob], posterFileName(x), { type: "image/png" }), "creative");
     save();
-    toast("🖼️ Poster saved to the plan");
+    toast("Poster saved to the plan");
     planRefresh();
   } catch (e) {
     alert("Not saved. " + e.message);

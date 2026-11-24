@@ -27,7 +27,7 @@ function profileDialog() {
   root.innerHTML = `<form class="panel" onsubmit="saveProfile(event)"><div class="line"><h2 style="margin:0">Event profile</h2><button type="button" class="btn small ghost" onclick="$('profileDialog').remove()">Close</button></div>
     <p class="hint">Tick everything that applies. New ticks add the checklist items they need. Unticking never deletes anything: mark those items "Not needed" instead.</p>
     <label><span class="muted">Expected capacity (peak, including staff)</span><input class="field" type="number" min="0" name="capacity" value="${esc(p.capacity || "")}"></label>
-    <div class="profile-grid">${PLAN_PROFILE.map(([k, l, i]) => `<label class="check-card"><input type="checkbox" name="pf_${k}" ${pf[k] ? "checked" : ""}><span aria-hidden="true">${i}</span> ${esc(l)}</label>`).join("")}</div>
+    <div class="profile-grid">${PLAN_PROFILE.map(([k, l]) => `<label class="check-card"><input type="checkbox" name="pf_${k}" ${pf[k] ? "checked" : ""}>${esc(l)}</label>`).join("")}</div>
     <button class="btn big" type="submit">Save and update checklist</button></form>`;
   document.body.appendChild(root);
 }
@@ -40,7 +40,7 @@ function saveProfile(e) {
   const added = mergeTemplate(p);
   save();
   $("profileDialog")?.remove();
-  toast(added ? `✦ Added <b>${added}</b> checklist item${added > 1 ? "s" : ""} for this event's profile` : "Event profile saved. Nothing new to add.");
+  toast(added ? `Added <b>${added}</b> checklist item${added > 1 ? "s" : ""} for this event's profile` : "Event profile saved. Nothing new to add.");
   planRefresh();
 }
 // Add template items this plan is missing (matched by title), keeping everything already there.
@@ -53,7 +53,7 @@ function mergeTemplate(p) {
     const missing = fs.items.filter((i) => !have.has(i.title.toLowerCase()));
     if (!missing.length) continue;
     if (!stage) {
-      stage = { key: fs.key, name: fs.name, icon: fs.icon, items: [] };
+      stage = { key: fs.key, name: fs.name, items: [] };
       const order = PLAN_STAGES.map(([k]) => k);
       const at = p.stages.findIndex((s) => order.indexOf(s.key) > order.indexOf(fs.key));
       at < 0 ? p.stages.push(stage) : p.stages.splice(at, 0, stage);
@@ -95,16 +95,16 @@ function planSuppliers(p) {
           ${checks}
           <label class="wide"><span class="muted">Notes</span><textarea class="field" rows="2" onchange="setSupplier(${s.id},'notes',this.value)">${esc(s.notes || "")}</textarea></label>
         </div>
-        <div class="files">${(s.files || []).map((f, n) => `<span class="file"><a href="${esc(f.url)}" target="_blank" rel="noopener">📎 ${esc(f.name)}</a> <button class="btn small ghost" onclick="removeSupplierFile(${s.id},${n})" aria-label="Remove ${esc(f.name)}">×</button></span>`).join("")}</div>
-        <div class="toolbar"><button class="btn small secondary" onclick="attachToSupplier(${s.id})">📎 Attach certificate</button><button class="btn small danger" onclick="deleteSupplier(${s.id})">Remove supplier</button></div></details>`;
+        <div class="files">${(s.files || []).map((f, n) => `<span class="file"><a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.name)}</a> <button class="btn small ghost" onclick="removeSupplierFile(${s.id},${n})" aria-label="Remove ${esc(f.name)}">×</button></span>`).join("")}</div>
+        <div class="toolbar"><button class="btn small secondary" onclick="attachToSupplier(${s.id})">Attach certificate</button><button class="btn small danger" onclick="deleteSupplier(${s.id})">Remove supplier</button></div></details>`;
     })
     .join("");
   const power = pw.kw
     ? `<div class="power-grid"><div><span class="muted">Total connected load</span><b>${pw.kw} kW</b></div><div><span class="muted">Estimated demand (70% diversity, +25% headroom)</span><b>${pw.kva} kVA</b></div><div><span class="muted">Suggested generator</span><b>${pw.size ? pw.size + " kVA" : "Over 1000 kVA: specialist"}</b></div><div><span class="muted">Approx. current</span><b>${pw.threePhase || pw.amps1 > 63 ? pw.amps3 + " A per phase (3-phase)" : pw.amps1 + " A single phase"}</b></div></div>
-      ${pw.missing ? `<p class="hint">⚠️ ${pw.missing} supplier${pw.missing > 1 ? "s haven't" : " hasn't"} given a power figure yet, so the total is low.</p>` : ""}
+      ${pw.missing ? `<p class="hint"><b>Note:</b> ${pw.missing} supplier${pw.missing > 1 ? "s haven't" : " hasn't"} given a power figure yet, so the total is low.</p>` : ""}
       <p class="hint">A planning estimate to start the conversation with your power supplier. Distribution, cable sizes, earthing and RCD protection must be designed and signed off by a competent electrician to BS 7909. Motor loads (fridges, compressors, fryers) can need extra starting capacity.</p>`
     : `<p class="hint">Add each supplier's power needs to size the generator.</p>`;
-  return `<div class="panel"><h2 style="margin-top:0">⚡ Power</h2>${power}</div>
+  return `<div class="panel"><h2 style="margin-top:0">Power</h2>${power}</div>
     <div class="line" style="border:0"><h2 style="margin:0">Suppliers, traders & contractors</h2><button class="btn" onclick="addSupplier()">+ Add supplier</button></div>
     <p class="hint">For each supplier, collect insurance, a risk assessment, a method statement and any trade certificates before they arrive on site.</p>
     ${rows || '<p class="empty">No suppliers yet. Add your bars, food traders, staging, power, security and medical providers.</p>'}`;
@@ -181,7 +181,7 @@ function planCompliance(p) {
     .join("");
   const sups = c.sup.map(({ s, gaps }) => row(!gaps.length, s.name, gaps.length ? "Missing: " + gaps.map(esc).join(", ") : "All evidence received", `<button class="btn small secondary" onclick="plannerTab='suppliers';render()">Open</button>`)).join("");
   return `<div class="panel comp-head">${ring(c.pct, 72)}<div><h2 style="margin:0">Compliance pack</h2><p class="muted" style="margin:4px 0 0">${c.docsOk.length}/${c.docs.length} documents approved · ${c.certsOk.length}/${c.certs.length} certificates filed · ${c.supOk.length}/${c.sup.length} suppliers compliant</p></div>
-    <button class="btn" onclick="printCompliance()">🖨️ Print pack</button></div>
+    <button class="btn" onclick="printCompliance()">Print pack</button></div>
     <p class="hint">This is everything a venue, council or Safety Advisory Group will usually ask for. It is a planning aid built on UK health and safety law and official guidance: a competent person should review your documents, and check the current Purple Guide and your local authority's requirements for this event.</p>
     <h3>Safety documents</h3>${docs || '<p class="empty">No documents on this plan.</p>'}
     <h3>Licences, certificates & evidence</h3>${certs || '<p class="empty">No certificates on this plan.</p>'}

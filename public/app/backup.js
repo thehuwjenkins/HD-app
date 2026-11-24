@@ -72,12 +72,12 @@ async function hqBackupStatus() {
     el.className = "chip " + (s.healthy ? "good" : "bad");
     const at = new Date(s.lastSuccess?.at || 0);
     const short = at.toDateString() === new Date().toDateString() ? at.toLocaleTimeString("en-GB", { timeStyle: "short" }) : at.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-    el.textContent = s.healthy ? "✓ Backed up " + short : "⚠ Backup needs attention";
+    el.textContent = s.healthy ? "✓ Backed up " + short : "Backup needs attention";
     el.title = s.healthy ? "History, backups, export and import" : s.problem + (s.lastSuccess ? " Last good backup " + hqWhen(s.lastSuccess.at) + "." : "");
     return s;
   } catch (e) {
     el.className = "chip bad";
-    el.textContent = "⚠ Backup status unknown";
+    el.textContent = "Backup status unknown";
     el.title = e.message;
   }
 }

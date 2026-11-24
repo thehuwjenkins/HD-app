@@ -11,35 +11,35 @@
 //   when = (profile) => boolean
 
 const PLAN_STAGES = [
-  ["concept", "Concept & creative", "🎨"],
-  ["venue", "Venue, licensing & permissions", "📍"],
-  ["insurance", "Insurance", "🛡️"],
-  ["risk", "Risk assessments", "⚠️"],
-  ["safety", "Safety, medical & welfare", "⛑️"],
-  ["method", "Site, structures & method statements", "📐"],
-  ["power", "Power & technical safety", "⚡"],
-  ["bars", "Bars & food", "🍺"],
-  ["crew", "Staffing, crew & security", "👷"],
-  ["kit", "Equipment booking", "🔊"],
-  ["suppliers", "Suppliers & contractors", "🤝"],
-  ["schedule", "Build, show day & derig", "🗓️"],
-  ["post", "Post-event review & invoicing", "✅"],
+  ["concept", "Concept & creative"],
+  ["venue", "Venue, licensing & permissions"],
+  ["insurance", "Insurance"],
+  ["risk", "Risk assessments"],
+  ["safety", "Safety, medical & welfare"],
+  ["method", "Site, structures & method statements"],
+  ["power", "Power & technical safety"],
+  ["bars", "Bars & food"],
+  ["crew", "Staffing, crew & security"],
+  ["kit", "Equipment booking"],
+  ["suppliers", "Suppliers & contractors"],
+  ["schedule", "Build, show day & derig"],
+  ["post", "Post-event review & invoicing"],
 ];
 
 // Questions asked when an event is created. Keys are stored on plan.profile.
 const PLAN_PROFILE = [
-  ["outdoor", "Outdoors (or partly outdoors)", "🌤️"],
-  ["alcohol", "Alcohol sold or supplied", "🍺"],
-  ["food", "Food traders or catering", "🍔"],
-  ["liveMusic", "Live or amplified music", "🎵"],
-  ["structures", "Staging, marquees or temporary structures", "🏗️"],
-  ["generators", "Generators / temporary power", "⚡"],
-  ["rigging", "Flown or rigged equipment (speakers, lights, truss)", "⛓️"],
-  ["children", "Children or families attending", "👨‍👩‍👧"],
-  ["camping", "Overnight camping", "⛺"],
-  ["traffic", "Road closures or public highway use", "🚧"],
-  ["sfx", "Fireworks, pyro, lasers, haze or special effects", "🎆"],
-  ["drones", "Drone filming", "🚁"],
+  ["outdoor", "Outdoors (or partly outdoors)"],
+  ["alcohol", "Alcohol sold or supplied"],
+  ["food", "Food traders or catering"],
+  ["liveMusic", "Live or amplified music"],
+  ["structures", "Staging, marquees or temporary structures"],
+  ["generators", "Generators / temporary power"],
+  ["rigging", "Flown or rigged equipment (speakers, lights, truss)"],
+  ["children", "Children or families attending"],
+  ["camping", "Overnight camping"],
+  ["traffic", "Road closures or public highway use"],
+  ["sfx", "Fireworks, pyro, lasers, haze or special effects"],
+  ["drones", "Drone filming"],
 ];
 
 const big = (p) => (Number(p.capacity) || 0) >= 500;
@@ -186,10 +186,9 @@ const PLAN_TEMPLATES = {
 function planFromTemplate(templateKey, eventDate, profile = {}) {
   const t = PLAN_TEMPLATES[templateKey] || PLAN_TEMPLATES.general;
   let n = 0;
-  return PLAN_STAGES.map(([key, name, icon]) => ({
+  return PLAN_STAGES.map(([key, name]) => ({
     key,
     name,
-    icon,
     items: (t.items[key] || [])
       .filter(([, , extra = {}]) => !extra.when || extra.when(profile))
       .map(([title, offset, extra = {}]) => ({
