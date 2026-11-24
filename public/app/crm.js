@@ -74,15 +74,33 @@ function addClient(e) {
   save();
   render();
 }
+// "Create client" from the job form: a full contact, then linked to the job straight away.
 function quickClient() {
-  let name = prompt("New client name");
-  if (!name) return;
-  let company = prompt("Company (optional)") || "";
-  let email = prompt("Email (optional)") || "";
-  let c = { id: uid(), name, company, email };
+  const root = document.createElement("div");
+  root.className = "modal";
+  root.id = "clientDialog";
+  root.innerHTML = `<form class="panel" onsubmit="saveQuickClient(event)"><div class="line"><h2 style="margin:0">Create client</h2><button type="button" class="btn small ghost" onclick="$('clientDialog').remove()">Close</button></div>
+    <div class="form" style="margin-top:14px">
+      <label><span class="muted">Contact name</span><input class="field" name="name" required autocomplete="off"></label>
+      <label><span class="muted">Company (optional)</span><input class="field" name="company"></label>
+      <label><span class="muted">Email (for quotes and invoices)</span><input class="field" name="email" type="email"></label>
+      <label><span class="muted">Phone</span><input class="field" name="phone" type="tel"></label>
+      <label class="wide"><span class="muted">Postal address (shown on invoices)</span><textarea class="field" name="address" rows="2"></textarea></label>
+    </div><button class="btn big" type="submit">Create client and add to job</button></form>`;
+  document.body.appendChild(root);
+  root.querySelector("input[name=name]").focus();
+}
+function saveQuickClient(e) {
+  e.preventDefault();
+  const d = data(e);
+  const c = { id: uid(), name: d.name.trim(), company: d.company.trim(), email: d.email.trim(), phone: d.phone.trim(), address: d.address.trim() };
   db.clients.push(c);
   save();
-  let sel = document.querySelector('#jobForm select[name="clientId"]');
-  sel.insertAdjacentHTML("beforeend", `<option value="${c.id}">${esc(name)}</option>`);
-  sel.value = c.id;
+  $("clientDialog").remove();
+  const sel = document.querySelector('#jobForm select[name="clientId"]');
+  if (sel) {
+    sel.insertAdjacentHTML("beforeend", `<option value="${c.id}">${esc(c.name)}${c.company ? " — " + esc(c.company) : ""}</option>`);
+    sel.value = c.id;
+  }
+  toast("Client <b>" + esc(c.name) + "</b> created and added to the job");
 }

@@ -25,6 +25,9 @@ function overviewFacts() {
 // The single most useful thing to do next.
 function nextAction(f) {
   const n = (x, one, many) => (x === 1 ? one : many.replace("#", x));
+  const accepted = db.jobs.filter((j) => j.acceptedAt && stageOf(j) === "quote");
+  if (accepted.length)
+    return [`${esc(accepted[0].acceptedBy || "The client")} accepted the quote for ${esc(accepted[0].title)}`, esc(accepted[0].needsBooking || "It needs booking."), "Book it", `acceptJob(${accepted[0].id})`];
   if (f.short.length)
     return [`Sort kit for ${esc(f.short[0].job.title)}`, `${f.short[0].issues.map((i) => esc(i.name) + " short by " + i.short).join(", ")}${f.short.length > 1 ? ` · ${f.short.length - 1} more job(s) short` : ""}`, "Plan cross-hire", "go('Cross-hire')"];
   if (f.overdue.length)

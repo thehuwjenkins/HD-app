@@ -312,5 +312,23 @@ export function importRows(text){
   });
   return {items,skipped,columns:map.filter(Boolean)};
 }
+// ---------- Quote / invoice figures (shared by the app, printouts and the client's quote page) ----------
+export const CREW_CATEGORY='Labour / Crew';
+export const QUOTE_SECTIONS=['Audio','Visual','Lighting','Stage & Rigging','Power Distribution','Transport','Install','Labour / Crew'];
+// Crew: people × days/hours × rate. Everything else: qty × price.
+export function lineAmount(k){return (Number(k.qty)||0)*(Number(k.price)||0)*((k.category||'')===CREW_CATEGORY?(Number(k.time)||1):1);}
+// Equipment as one total per section; crew itemised; then discount and VAT (20%, only if VAT registered).
+export function quoteSummary(job,{vatRegistered=false}={}){
+  const sums=new Map();
+  for(const k of job.kit||[]){const c=k.category||'Audio';sums.set(c,(sums.get(c)||0)+lineAmount(k));}
+  const order=c=>(QUOTE_SECTIONS.indexOf(c)+1)||99;
+  const totals=[...sums].sort(([a],[b])=>order(a)-order(b)).map(([name,total])=>({name,total:Math.round(total*100)/100})).filter(x=>x.total>0);
+  const crew=(job.kit||[]).filter(k=>(k.category||'')===CREW_CATEGORY&&lineAmount(k)>0).map(k=>({role:k.item,people:Number(k.qty)||0,time:Number(k.time)||1,unit:k.unit==='hour'?'hour':'day',rate:Number(k.price)||0,total:Math.round(lineAmount(k)*100)/100}));
+  const sub=Math.round(totals.reduce((s,x)=>s+x.total,0)*100)/100,discount=Math.min(sub,Number(job.discount)||0),net=Math.round((sub-discount)*100)/100;
+  const vat=vatRegistered?Math.round(net*20)/100:0;
+  return {totals,sections:totals.filter(x=>x.name!==CREW_CATEGORY),crew,sub,discount,net,vat,gross:Math.round((net+vat)*100)/100};
+}
+// Next invoice number: HD-1001, HD-1002, … (one higher than any used so far).
+export function nextInvoiceNo(jobs=[]){return 'HD-'+(jobs.reduce((m,j)=>Math.max(m,Number(String(j.invoiceNo||'').replace(/\D/g,''))||0),1000)+1);}
 // Shared with the browser: the owner page loads this file as a module and uses the same checks.
-if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, allocated, allocatedTo, inventoryTotals, loadCheck, parseTable, importRows, loadItems, packVehicle, planLoad, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});
+if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, allocated, allocatedTo, lineAmount, quoteSummary, nextInvoiceNo, QUOTE_SECTIONS, inventoryTotals, loadCheck, parseTable, importRows, loadItems, packVehicle, planLoad, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});

@@ -51,42 +51,117 @@ function moveTo(id, to) {
 function nextActions(j) {
   const st = stageOf(j);
   const b = (label, fn, cls = "") => `<button class="btn small ${cls}" onclick="${fn}">${label}</button>`;
-  const money = me.money,
-    owner = me.owner;
+  const owner = me.owner,
+    canMoney = me.money;
+  if (st === "quote" && j.acceptedAt)
+    return b("Client accepted: book it", `acceptJob(${j.id})`) + `<span class="hint" style="margin:0">${esc(j.needsBooking || "")}</span>`;
   return (
     {
-      enquiry: (money ? b("Send quote", `sendQuote(${j.id})`) : "") + b("Mark quote as sent", `moveTo(${j.id},'quote')`, money ? "secondary" : ""),
-      quote: b("Mark as accepted", `moveTo(${j.id},'booked')`),
-      booked: b("Mark as hired out", `moveTo(${j.id},'out')`) + (owner ? b("Send invoice", `sendInvoice(${j.id})`, "secondary") : ""),
-      out: b("Mark as returned", `moveTo(${j.id},'returned')`),
-      returned: (owner ? b("Send invoice", `sendInvoice(${j.id})`) : "") + b("Mark as invoiced", `moveTo(${j.id},'invoiced')`, owner ? "secondary" : ""),
+      enquiry: (canMoney ? b("Send quote", `sendToClient(${j.id},'quote')`) : "") + b("Mark quote as sent", `moveTo(${j.id},'quote')`, canMoney ? "secondary" : ""),
+      quote: b("Mark as accepted", `acceptJob(${j.id})`) + (canMoney ? b("Resend quote", `sendToClient(${j.id},'quote')`, "secondary") : ""),
+      booked: b("Print picking list", `printJob(${j.id})`) + (owner ? b("Send invoice", `sendToClient(${j.id},'invoice')`, "secondary") : "") + b("Mark as hired out", `moveTo(${j.id},'out')`, "secondary"),
+      out: b("Mark as returned", `moveTo(${j.id},'returned')`) + b("Picking list", `printJob(${j.id})`, "secondary"),
+      returned: (owner ? b("Send invoice", `sendToClient(${j.id},'invoice')`) : "") + b("Mark as invoiced", `moveTo(${j.id},'invoiced')`, owner ? "secondary" : ""),
       invoiced: "",
     }[st] || ""
   );
 }
-// Email draft to the client with the document open alongside it to save as PDF and attach.
-function clientEmailDraft(j, subject, body) {
+// Accepting (by Huw, or the client online) books the job, creates the invoice and readies the picking list.
+function acceptJob(id) {
+  const j = db.jobs.find((x) => x.id === id);
+  if (!j) return;
+  if (!moveTo(id, "booked")) return; // stock or dates need sorting first (moveTo explains)
+  j.acceptedAt ||= new Date().toISOString();
+  j.acceptedBy ||= "Marked by " + (me.email || "HD Events");
+  j.acceptedVia ||= "manual";
+  delete j.needsBooking;
+  if (!j.invoiceNo) {
+    j.invoiceNo = nextInvoiceNo(db.jobs);
+    j.invoiceDate = todayKey();
+  }
+  save();
+  render();
+  toast(`<b>${esc(j.title)}</b> booked. Invoice ${esc(j.invoiceNo)} created and the picking list is ready.`);
+}
+function clientLink(j) {
+  return location.origin + "/q/" + j.quoteToken;
+}
+function ensureQuoteLink(j) {
+  if (!j.quoteToken) {
+    const bytes = crypto.getRandomValues(new Uint8Array(20));
+    j.quoteToken = [...bytes].map((x) => x.toString(16).padStart(2, "0")).join("");
+    save();
+  }
+  return clientLink(j);
+}
+// The "email the client" window: To, subject and message filled in, with the client's link.
+function sendToClient(id, kind) {
+  const j = db.jobs.find((x) => x.id === id);
+  if (!j) return;
+  if (kind === "invoice" && !j.invoiceNo) {
+    j.invoiceNo = nextInvoiceNo(db.jobs);
+    j.invoiceDate = todayKey();
+    save();
+  }
+  const link = ensureQuoteLink(j);
   const c = db.clients.find((x) => String(x.id) === String(j.clientId)) || {};
-  const a = document.createElement("a");
-  a.href = "mailto:" + encodeURIComponent(c.email || "") + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
-  a.click();
-  return !!c.email;
+  const co = db.company?.name || "HD Events";
+  const total = money(quoteSummary(j, { vatRegistered: !!db.company?.vatNumber }).gross);
+  const subject = kind === "quote" ? `Quotation: ${j.title}` : `Invoice ${j.invoiceNo}: ${j.title}`;
+  const body =
+    kind === "quote"
+      ? `Hello${c.name ? " " + c.name.split(" ")[0] : ""},\n\nThank you for your enquiry. Your quotation for ${j.title}${j.start ? " (" + fmtRange(j) + ")" : ""} is ready: ${total}.\n\nYou can view it, save it as a PDF and accept it online here:\n${link}\n\nAny questions, just reply to this email.\n\nKind regards,\n${co}`
+      : `Hello${c.name ? " " + c.name.split(" ")[0] : ""},\n\nThank you for booking with us. Your invoice ${j.invoiceNo} for ${j.title} (${total}) is here, with payment details:\n${link}\n\nPlease use ${j.invoiceNo} as the payment reference.\n\nKind regards,\n${co}`;
+  const root = document.createElement("div");
+  root.className = "modal";
+  root.id = "sendDialog";
+  root.innerHTML = `<div class="panel send-dialog"><div class="line"><h2 style="margin:0">${kind === "quote" ? "Send quote" : "Send invoice"} · ${esc(j.title)}</h2><button class="btn small ghost" onclick="$('sendDialog').remove()">Close</button></div>
+    ${c.email ? "" : `<p class="load-warn">This client has no email address yet. Type it below, or add it under CRM.</p>`}
+    <div class="form" style="margin-top:12px">
+      <label class="wide"><span class="muted">To</span><input class="field" id="sendTo" type="email" value="${esc(c.email || "")}" placeholder="client@example.com"></label>
+      <label class="wide"><span class="muted">Subject</span><input class="field" id="sendSubject" value="${esc(subject)}"></label>
+      <label class="wide"><span class="muted">Message</span><textarea class="field" id="sendBody" rows="11">${esc(body)}</textarea></label>
+    </div>
+    <p class="hint">The link opens a page with the ${kind === "quote" ? "quote, which the client can save as a PDF and accept online. When they accept, the job is booked, the invoice is created and the picking list is ready, automatically." : "invoice and your bank details. The client can save it as a PDF."}</p>
+    <div class="toolbar">
+      <button class="btn" onclick="sendVia('gmail',${id},'${kind}')">Open in Gmail</button>
+      <button class="btn secondary" onclick="sendVia('mailto',${id},'${kind}')">Open in email app</button>
+      <button class="btn secondary" onclick="copySend()">Copy message</button>
+      <a class="btn secondary" href="${esc(link)}" target="_blank" rel="noopener">Preview client page</a>
+      <button class="btn ghost" onclick="${kind === "quote" ? "printQuote" : "printInvoice"}(${id})">Print / PDF</button>
+    </div></div>`;
+  document.body.appendChild(root);
 }
-function sendQuote(id) {
+function sendVia(how, id, kind) {
+  const to = $("sendTo").value.trim(),
+    su = $("sendSubject").value,
+    body = $("sendBody").value;
+  const url =
+    how === "gmail"
+      ? "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(to) + "&su=" + encodeURIComponent(su) + "&body=" + encodeURIComponent(body)
+      : "mailto:" + encodeURIComponent(to) + "?subject=" + encodeURIComponent(su) + "&body=" + encodeURIComponent(body);
+  if (how === "gmail") window.open(url, "_blank", "noopener");
+  else location.href = url;
+  // Save the email address on the client if it was typed here.
   const j = db.jobs.find((x) => x.id === id);
-  printQuote(id);
-  const hasEmail = clientEmailDraft(j, "Quotation: " + j.title, `Hello,\n\nPlease find attached our quotation for ${j.title}${j.start ? " (" + fmtRange(j) + ")" : ""}.\n\nAny questions, just reply to this email.\n\nKind regards,\n${db.company?.name || "HD Events"}`);
-  setTimeout(() => {
-    if (confirm(`The quote has opened in a new tab: save it as a PDF and attach it to the email${hasEmail ? "" : " (no email address on this client yet)"}.\n\nMark the quote as sent now?`)) moveTo(id, "quote");
-  }, 400);
+  const c = db.clients.find((x) => String(x.id) === String(j.clientId));
+  if (c && to && !c.email) c.email = to;
+  if (kind === "quote" && !j.acceptedAt) {
+    j.quoteSentAt = new Date().toISOString(); // the quote is valid for 30 days from sending
+    if (stageOf(j) === "enquiry") moveTo(id, "quote");
+  }
+  if (kind === "invoice") j.invoiceSentAt = new Date().toISOString();
+  save();
+  render();
+  $("sendDialog")?.remove();
+  toast(kind === "quote" ? "Quote ready to send in your email. Marked as Quote sent." : "Invoice ready to send in your email.");
 }
-function sendInvoice(id) {
-  const j = db.jobs.find((x) => x.id === id);
-  printInvoice(id);
-  if (!j.invoiceNo) return; // invoice not created
-  const hasEmail = clientEmailDraft(j, "Invoice " + j.invoiceNo + ": " + j.title, `Hello,\n\nPlease find attached invoice ${j.invoiceNo} for ${j.title}.\n\nThank you for your business.\n\nKind regards,\n${db.company?.name || "HD Events"}`);
-  if (stageOf(j) === "returned")
-    setTimeout(() => {
-      if (confirm(`The invoice has opened in a new tab: save it as a PDF and attach it to the email${hasEmail ? "" : " (no email address on this client yet)"}.\n\nMark the job as invoiced now?`)) moveTo(id, "invoiced");
-    }, 400);
+async function copySend() {
+  const text = "To: " + $("sendTo").value + "\nSubject: " + $("sendSubject").value + "\n\n" + $("sendBody").value;
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("Message copied");
+  } catch {
+    $("sendBody").select();
+  }
 }

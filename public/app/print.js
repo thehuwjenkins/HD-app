@@ -146,23 +146,9 @@ function printJob(id) {
   return printDocument("Picking list", "Job " + j.id, body, { lead: j.title });
 }
 
-// Category totals for quotes and invoices (unit prices stay internal).
+// Quote and invoice figures come from quoteSummary (stock.js), the same code the client's quote page uses.
 function jobTotals(j) {
-  // Every line counts, whatever its category (standard categories first, in their usual order).
-  const sums = new Map();
-  for (const k of j.kit || []) {
-    const c = k.category || "Audio";
-    sums.set(c, (sums.get(c) || 0) + lineTotal(k));
-  }
-  const totals = [...sums]
-    .sort(([a], [b]) => (cats.indexOf(a) + 1 || 99) - (cats.indexOf(b) + 1 || 99))
-    .map(([name, total]) => ({ name, total }))
-    .filter((x) => x.total > 0);
-  const sub = totals.reduce((s, x) => s + x.total, 0),
-    discount = Math.min(sub, Number(j.discount) || 0),
-    net = sub - discount;
-  const vat = db.company?.vatNumber ? Math.round(net * 20) / 100 : 0;
-  return { totals, sub, discount, net, vat, gross: net + vat };
+  return quoteSummary(j, { vatRegistered: !!db.company?.vatNumber });
 }
 // Quote and invoice lines: one row per equipment section; crew itemised (people × days/hours × rate).
 function billingTable(j) {
@@ -197,15 +183,12 @@ function printQuote(id) {
 }
 
 // ---------- Invoice ----------
-function nextInvoiceNo() {
-  return db.jobs.reduce((m, j) => Math.max(m, Number(String(j.invoiceNo || "").replace(/\D/g, "")) || 0), 1000) + 1;
-}
 function printInvoice(id) {
   const j = db.jobs.find((x) => String(x.id) === String(id));
   if (!j || !me.owner) return;
   if (!j.invoiceNo) {
-    if (!confirm(`Create invoice HD-${nextInvoiceNo()} for ${j.title}?\n\nThe invoice number and date are saved on the job, so reprints show the same invoice.`)) return;
-    j.invoiceNo = "HD-" + nextInvoiceNo();
+    if (!confirm(`Create invoice ${nextInvoiceNo(db.jobs)} for ${j.title}?\n\nThe invoice number and date are saved on the job, so reprints show the same invoice.`)) return;
+    j.invoiceNo = nextInvoiceNo(db.jobs);
     j.invoiceDate = todayKey();
     save();
     render();

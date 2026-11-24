@@ -117,7 +117,7 @@ const money = (n) => (me.money ? "£" + (Number(n) || 0).toFixed(2) : "—");
 // Crew lines are charged per person per day or hour: people × days/hours × rate. Everything else is qty × price.
 const CREW_CAT = "Labour / Crew";
 const isCrewLine = (k) => (k.category || "") === CREW_CAT;
-const lineTotal = (k) => (Number(k.qty) || 0) * (Number(k.price) || 0) * (isCrewLine(k) ? Number(k.time) || 1 : 1);
+const lineTotal = (k) => lineAmount(k); // shared with the server (stock.js)
 const crewQtyText = (k) => `${Number(k.qty) || 0} crew × ${Number(k.time) || 1} ${k.unit === "hour" ? "hour" : "day"}${(Number(k.time) || 1) === 1 ? "" : "s"}`;
 function inputTime(value, end) {
   if (!value) return "";

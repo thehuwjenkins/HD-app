@@ -132,3 +132,16 @@ Then do the restore drill in `RESTORE.md` once.
 - The save goes through the app's own `applyChanges`, so it is validated, appears in History and can be undone.
 - Add `--dry-run` to preview without saving.
 - Uses `tools/live-d1.mjs`, which talks to the live D1 database through Cloudflare's API.
+
+## Client quote links (/q/<token>)
+
+- Each job gets a random 40-character token when a quote is first sent. https://hq.hd-events.co.uk/q/<token> shows the quote to the client without sign-in.
+- A second Cloudflare Access application, "HD Events HQ: client quote links (public)", covers `hq.hd-events.co.uk/q` with a **bypass** policy. Everything else still needs sign-in, and the worker itself refuses any non-/q request without a valid Access pass.
+- Accepting a quote on that page:
+  - books the job (if stock and dates allow);
+  - creates the invoice number;
+  - records who accepted it;
+  - turns the same link into the invoice page.
+
+  If the job can't be booked automatically, it stays at Quote sent with `needsBooking`, and Overview asks Huw to book it.
+- Quotes expire 30 days after `quoteSentAt`.

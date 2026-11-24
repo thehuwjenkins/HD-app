@@ -8,6 +8,7 @@ import {crewPage,upgradePage} from './pages.js';
 import {whoIs,describe,visibleState,prepareChanges,checkAccessSetting} from './roles.js';
 import {syncAccess,accessStatus} from './accesssync.js';
 import {handleCrew} from './crew.js';
+import {handleClientLink} from './clientlink.js';
 import {STATIC} from './static.gen.js';
 // App code, styles and logo bundled into the worker (see tools/bundle-static.mjs).
 function bundled(path){
@@ -134,6 +135,10 @@ function ownerPage({state,versions},who){
 
 export default {
 async fetch(req,env){
+  // Client quote links (/q/<token>) are public: Cloudflare Access bypasses /q, and the random token is the key.
+  const path0=new URL(req.url).pathname;
+  if(path0==='/q/logo.png'){const r=bundled('/logo-print.png');r.headers.set('cache-control','public, max-age=86400');return r;}
+  if(path0.startsWith('/q/'))return handleClientLink(req,env,new URL(req.url));
   let email;
   try{email=await staffEmail(req,env);}
   catch(e){

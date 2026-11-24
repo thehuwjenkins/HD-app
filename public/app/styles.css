@@ -713,3 +713,6 @@ body { background: var(--bg); }
 .report-photos figure { margin: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: #fff; }
 .report-photos img { width: 100%; height: 160px; object-fit: cover; display: block; }
 .report-photos figcaption { padding: 8px 10px; font-size: 13px; }
+.send-dialog { max-width: 760px; margin: auto; }
+.accepted-line { font-size: 13px; color: #0f6138; margin-top: 6px; }
+.accepted-line.muted { color: var(--muted); }
