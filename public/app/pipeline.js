@@ -10,11 +10,11 @@ function pipeline() {
       .map((j) => {
         const issues = st === "invoiced" || st === "returned" ? [] : jobShortages(j);
         const late = st === "booked" && (jobDays(j)?.[0] || "9") < today;
-        return `<div class="board-card"><b>${esc(j.title)}</b><span class="muted">${esc(j.client || "No client")}</span><span class="muted">${esc(fmtRange(j))}</span><span class="muted">${money(jobValue(j))}</span>${issues.length ? `<span class="tag warning">${issues.length} shortage(s)</span>` : ""}${late ? '<span class="tag warning">Start date passed</span>' : ""}
+        return `<div class="board-card"><b>${esc(j.title)}</b><span class="muted">${esc(j.client || "No client")}</span><span class="muted">${esc(fmtRange(j))}</span><span class="muted">${money(jobValue(j))}</span>${issues.length ? `<span class="tag warning">${issues.length} shortage(s)</span>` : ""}${late ? '<span class="tag warning">Start date passed</span>' : ""}${jobStatusTags(j)}
         <div class="moves"><button class="btn small ghost" ${i === 0 ? "disabled" : ""} onclick="moveStage(${j.id},-1)" aria-label="Move ${esc(j.title)} back to ${i ? STAGE_LABELS[STAGES[i - 1]] : ""}">←</button><button class="btn small secondary" onclick="openJob(${j.id})">Open</button><button class="btn small ghost" ${i === STAGES.length - 1 ? "disabled" : ""} onclick="moveStage(${j.id},1)" aria-label="Move ${esc(j.title)} on to ${STAGE_LABELS[STAGES[i + 1]] || ""}">→</button></div></div>`;
       })
       .join("");
-    return `<section class="board-col" data-stage="${st}"><h2>${STAGE_LABELS[st]} <small>${list.length} · ${money(total)}</small></h2>${cards || '<p class="hint">None</p>'}</section>`;
+    return `<section class="board-col" data-stage="${st}"><h2><button class="col-link" onclick="showJobs('${st}')" title="Show these jobs in the Jobs list">${STAGE_LABELS[st]}</button> <small>${list.length} · ${money(total)}</small></h2>${cards || '<p class="hint">None</p>'}</section>`;
   });
   return `<div class="toolbar">${canWrite("jobs") ? `<button class="btn" onclick="newJob()">+ New job</button>` : ""}<span class="hint">Booked and Out on hire reserve stock. Moving a job to Booked checks for shortages first.</span></div><div class="board">${cols.join("")}</div>`;
 }
@@ -27,11 +27,31 @@ function moveStage(id, dir) {
 }
 // When each step happened, recorded on the job.
 const STAGE_STAMP = { quote: "quoteSentAt", booked: "acceptedAt", out: "hiredOutAt", returned: "returnedAt", invoiced: "invoicedAt" };
+// What moving a job to a stage means, wherever it happens (next-step buttons, pipeline arrows, the job
+// editor's Stage box): stamp the date, and when it's booked, record the acceptance and create the invoice.
+// A job returned after its invoice was already sent goes straight to Invoiced.
+function stagedJob(j, to) {
+  const from = stageOf(j);
+  if (to === "returned" && j.invoiceSentAt) to = "invoiced";
+  const next = { ...j, stage: to, booking: STAGE_BOOKING[to] };
+  const now = new Date().toISOString();
+  if (STAGES.indexOf(to) > STAGES.indexOf(from))
+    for (const s of STAGES.slice(STAGES.indexOf(from) + 1, STAGES.indexOf(to) + 1)) if (STAGE_STAMP[s] && !next[STAGE_STAMP[s]]) next[STAGE_STAMP[s]] = now;
+  if (["booked", "out", "returned", "invoiced"].includes(to)) {
+    next.acceptedBy ||= "Marked by " + (me.email || "HD Events");
+    next.acceptedVia ||= "manual";
+    if (!next.invoiceNo) {
+      next.invoiceNo = nextInvoiceNo(db.jobs);
+      next.invoiceDate = todayKey();
+    }
+    delete next.needsBooking;
+  }
+  return next;
+}
 function moveTo(id, to) {
   const j = db.jobs.find((x) => x.id === id);
   if (!j || !to || to === stageOf(j)) return false;
-  const next = { ...j, stage: to, booking: STAGE_BOOKING[to] };
-  if (STAGE_STAMP[to] && STAGES.indexOf(to) > STAGES.indexOf(stageOf(j))) next[STAGE_STAMP[to]] = new Date().toISOString();
+  const next = stagedJob(j, to);
   if (next.booking === "Reserved" && j.booking !== "Reserved") {
     const [from, until] = bounds(next);
     if (!(until > from)) return alert("Set the job's allocation start and return date before booking it.");
@@ -46,6 +66,23 @@ function moveTo(id, to) {
   save();
   render();
   return true;
+}
+// Small status tags: where the job is in the quote → invoice flow.
+function jobStatusTags(j) {
+  const d = (s) => (s ? fmtDay(String(s).slice(0, 10), { day: "numeric", month: "short" }) : "");
+  const st = stageOf(j);
+  return [
+    st === "quote" && j.acceptedAt ? `<span class="tag success">Accepted ${d(j.acceptedAt)}: book it</span>` : st === "quote" && j.quoteSentAt ? `<span class="tag">Quote sent ${d(j.quoteSentAt)}</span>` : "",
+    j.invoiceNo && st !== "invoiced" ? `<span class="tag ${j.invoiceSentAt ? "success" : ""}">${esc(j.invoiceNo)}${j.invoiceSentAt ? " sent" : " not sent"}</span>` : "",
+  ].join("");
+}
+// Open the Jobs list showing one stage (or "all" / "active").
+function showJobs(filter) {
+  jobFilter = filter;
+  jobQuery = "";
+  editingJob = null;
+  go("Jobs");
+  window.scrollTo(0, 0);
 }
 // ---------- Next action on each job ----------
 function nextActions(j) {
@@ -71,16 +108,6 @@ function acceptJob(id) {
   const j = db.jobs.find((x) => x.id === id);
   if (!j) return;
   if (!moveTo(id, "booked")) return; // stock or dates need sorting first (moveTo explains)
-  j.acceptedAt ||= new Date().toISOString();
-  j.acceptedBy ||= "Marked by " + (me.email || "HD Events");
-  j.acceptedVia ||= "manual";
-  delete j.needsBooking;
-  if (!j.invoiceNo) {
-    j.invoiceNo = nextInvoiceNo(db.jobs);
-    j.invoiceDate = todayKey();
-  }
-  save();
-  render();
   toast(`<b>${esc(j.title)}</b> booked. Invoice ${esc(j.invoiceNo)} created and the picking list is ready.`);
 }
 function clientLink(j) {
@@ -150,7 +177,10 @@ function sendVia(how, id, kind) {
     j.quoteSentAt = new Date().toISOString(); // the quote is valid for 30 days from sending
     if (stageOf(j) === "enquiry") moveTo(id, "quote");
   }
-  if (kind === "invoice") j.invoiceSentAt = new Date().toISOString();
+  if (kind === "invoice") {
+    j.invoiceSentAt = new Date().toISOString();
+    if (stageOf(j) === "returned") moveTo(id, "invoiced");
+  }
   save();
   render();
   $("sendDialog")?.remove();

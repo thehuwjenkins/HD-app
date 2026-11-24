@@ -21,7 +21,7 @@ function packageTotals(p) {
 function packageCard(p) {
   const t = packageTotals(p);
   const missing = p.items.length - t.lines.length;
-  return `<div class="jobcard package-card"><div class="head"><div><b>${esc(p.name)}</b><div class="muted">${t.units} item${t.units === 1 ? "" : "s"}</div></div>
+  return `<div class="jobcard package-card"><div class="head"><div><b>${esc(p.name)}</b>${p.keepTogether ? ' <span class="tag cert">Kept together</span>' : ""}<div class="muted">${t.units} item${t.units === 1 ? "" : "s"}${p.keepTogether ? " · set aside from hire stock" : ""}</div></div>
     <div class="pkg-totals">${me.money ? `<span><span class="muted">Hire price</span><b>${money(t.price)}</b></span>` : ""}<span><span class="muted">Weight</span><b>${kg(t.weight)}</b></span></div></div>
     <details><summary>What's in it</summary><table class="pkg-table"><thead><tr><th>Qty</th><th>Item</th>${me.money ? '<th class="num">Price each</th><th class="num">Line</th>' : ""}<th class="num">Weight</th></tr></thead><tbody>${t.lines
       .map((x) => `<tr><td>${x.qty}</td><td>${esc(x.item.name)}</td>${me.money ? `<td class="num">${money(x.item.price)}</td><td class="num">${money(x.qty * (Number(x.item.price) || 0))}</td>` : ""}<td class="num">${hasNum(x.item.weightKg) ? kg(x.qty * x.item.weightKg) : "—"}</td></tr>`)
@@ -35,7 +35,7 @@ function packages() {
       editing ? "Edit package" : "Build a package",
       `<p class="hint">A package adds several inventory items to a job in one go. Its price and weight come from each item's hire price and weight × the quantity. Stock is still counted per item.</p>
       <form class="form" onsubmit="savePackage(event)"><label><div class="muted">Package name</div><input class="field" name="name" placeholder="e.g. Small PA — PS10" required value="${esc(editing?.name || "")}"></label><label><div class="muted">Search equipment</div><input class="field" id="packageSearch" placeholder="Search kit" oninput="filterPackageItems(this.value)"></label>
-      <div class="wide" id="packageItems">${packageItemChoices("")}</div><div class="wide" id="packagePreview">${packagePreview()}</div>
+      <label class="wide check-card"><input type="checkbox" name="keepTogether" ${editing?.keepTogether ? "checked" : ""}> Keep this kit together (always set aside from hire stock, e.g. a built PA rack whose cables never leave it)</label><div class="wide" id="packageItems">${packageItemChoices("")}</div><div class="wide" id="packagePreview">${packagePreview()}</div>
       <div class="wide toolbar"><button class="btn" type="submit">${editing ? "Save changes" : "Save package"}</button>${editing ? `<button class="btn ghost" type="button" onclick="cancelPackageEdit()">Cancel</button>` : ""}</div></form>`,
     ) + panel("Packages", db.packages.map(packageCard).join("") || '<p class="empty">No packages yet.</p>')
   );
@@ -66,10 +66,19 @@ function savePackage(e) {
     .filter(([id, q]) => q > 0 && db.inventory.some((i) => String(i.id) === id))
     .map(([id, qty]) => ({ id: Number(id), qty }));
   if (!items.length) return alert("Choose at least one item and quantity.");
-  const name = data(e).name.trim();
+  const d = data(e),
+    name = d.name.trim(),
+    keepTogether = d.keepTogether === "on";
   const editing = db.packages.find((p) => p.id === packageEditing);
-  if (editing) Object.assign(editing, { name, items });
-  else db.packages.push({ id: uid(), name, items });
+  const next = editing ? db.packages.map((p) => (p === editing ? { ...p, name, items, keepTogether } : p)) : [...db.packages, { id: uid(), name, items, keepTogether }];
+  try {
+    validate({ ...db, packages: next });
+  } catch (err) {
+    return alert(err.message);
+  }
+  db.packages = next;
+  // Jobs already using this package show its new name.
+  if (editing) db.jobs.forEach((j) => (j.kit || []).forEach((k) => String(k.pkgId) === String(editing.id) && ((k.package = name), (k.kept = keepTogether))));
   packageDraft = {};
   packageEditing = null;
   save();
@@ -88,7 +97,9 @@ function cancelPackageEdit() {
   render();
 }
 function removePackage(id) {
-  if (!confirm("Remove this saved package? Existing jobs are unaffected.")) return;
+  const p = db.packages.find((x) => x.id === id);
+  if (!confirm(`Remove the package ${p.name}?\n\nJobs that already have it keep its kit.${p.keepTogether ? " Its kit goes back into hire stock." : ""}`)) return;
+  db.jobs.forEach((j) => (j.kit || []).forEach((k) => String(k.pkgId) === String(id) && (delete k.kept, delete k.pkgId)));
   db.packages = db.packages.filter((p) => p.id !== id);
   save();
   render();
@@ -98,6 +109,6 @@ function addSelectedPackage() {
   const p = db.packages.find((x) => String(x.id) === $("packagePick").value);
   if (!p) return alert("Choose a saved package first.");
   const instance = uid();
-  for (const { qty, item } of packageLines(p)) draftKit.push({ item: item.name, qty, price: Number(item.price) || 0, category: item.category || guessCategory(item.name), package: p.name, pkg: instance });
+  for (const { qty, item } of packageLines(p)) draftKit.push({ item: item.name, qty, price: Number(item.price) || 0, category: item.category || guessCategory(item.name), package: p.name, pkg: instance, pkgId: p.id, ...(p.keepTogether ? { kept: true } : {}) });
   refreshKit();
 }

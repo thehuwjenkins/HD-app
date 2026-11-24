@@ -178,7 +178,23 @@ function editPlanDetails() {
     const shift = Math.round((dayMs(date) - dayMs(p.eventDate)) / DAY);
     p.stages.forEach((s) => s.items.forEach((i) => i.due && (i.due = addDays(i.due, shift))));
   }
+  const before = { title: p.title, eventDate: p.eventDate, venue: p.venue };
   Object.assign(p, { title: title.trim(), eventDate: date, venue });
+  // The linked job follows: name and venue if they matched, dates too while the job isn't booked.
+  const job = planJob(p);
+  if (job) {
+    if (job.title === before.title) job.title = p.title;
+    if (!job.venue || job.venue === before.venue) job.venue = venue;
+    if (date && date !== before.eventDate && job.booking !== "Reserved") {
+      const t = (s) => (String(s || "").length > 10 ? String(s).slice(10) : "");
+      const shift = before.eventDate && job.start ? Math.round((dayMs(date) - dayMs(before.eventDate)) / DAY) : 0;
+      if (!job.start) job.start = date;
+      else if (String(job.start).slice(0, 10) === before.eventDate) {
+        job.start = date + t(job.start);
+        if (job.end) job.end = addDays(String(job.end).slice(0, 10), shift) + t(job.end);
+      }
+    }
+  }
   save();
   render();
 }

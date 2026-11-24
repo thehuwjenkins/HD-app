@@ -160,3 +160,25 @@ test('accessories: checked, and counted per job like any other line', () => {
   bad([{item: 'IEC cable', qty: 1}, {item: 'IEC cable', qty: 1}], /twice/);
   bad([{item: 'IEC cable', qty: 0}], /1 to 100/);
 });
+
+import {setAside} from '../public/app/stock.js';
+test('kept-together packages: contents set aside, one booking at a time', () => {
+  const s = sample();
+  s.inventory.push({id: 5, name: 'IEC cable', qty: 20, service: 0});
+  s.packages.push({id: 70, name: 'PA rack', keepTogether: true, items: [{id: 5, qty: 2}]}, {id: 71, name: 'Loose kit', items: [{id: 5, qty: 5}]});
+  validateState(s);
+  assert.equal(setAside(s, 'IEC cable'), 2, 'only the kept-together package sets kit aside');
+  const day = {booking: 'Reserved', start: '2026-09-01T09:00', end: '2026-09-01T18:00'};
+  // 18 loose IECs are available to hire; 19 is too many.
+  assert.equal(shortages({...day, id: 1, title: 'A', kit: [{item: 'IEC cable', qty: 18}]}, s).length, 0);
+  assert.deepEqual(shortages({...day, id: 1, title: 'A', kit: [{item: 'IEC cable', qty: 19}]}, s).map((x) => x.short), [1]);
+  // The rack's own IECs don't count against loose stock, but the rack can't be in two places at once.
+  const rack = (id, title) => ({...day, id, title, kit: [{item: 'IEC cable', qty: 2, kept: true, pkgId: 70, package: 'PA rack'}]});
+  s.jobs.push(rack(2, 'Gig one'));
+  assert.equal(shortages({...day, id: 1, title: 'A', kit: [{item: 'IEC cable', qty: 18}]}, s).length, 0);
+  assert.deepEqual(shortages(rack(3, 'Gig two'), s).map((x) => [x.name, x.conflicts]), [['PA rack (kept together)', ['Gig one']]]);
+  assert.equal(shortages({...rack(3, 'Gig two'), start: '2026-09-02T09:00', end: '2026-09-02T18:00'}, s).length, 0);
+  // Can't keep more together than are in service.
+  const t = structuredClone(s); t.packages[0].items[0].qty = 21;
+  assert.throws(() => validateState(t), /21 kept together in packages but only 20/);
+});

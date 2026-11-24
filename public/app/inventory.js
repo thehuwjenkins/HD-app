@@ -38,13 +38,13 @@ function inventoryResults(matches) {
     : `<div class="tablewrap"><table><thead><tr><th>Equipment</th><th>Category</th><th>Owned</th><th>Out of service</th><th>To hire</th><th>Weight each</th>${me.money ? "<th>Value each</th><th>Total value</th><th>Hire price</th>" : ""}<th></th></tr></thead><tbody>${matches
         .map(
           (i) =>
-            `<tr><td>${esc(i.name)}${i.accessories?.length ? `<div class="acc-note">Accessories: ${i.accessories.map((a) => `${a.qty} × ${esc(a.item)}`).join(", ")}</div>` : ""}</td><td>${esc(i.category || "")}</td><td>${i.qty}</td><td>${i.service}</td><td>${availableToHire(i)}</td><td>${weightText(i)}</td>${me.money ? `<td>${valueText(i)}</td><td>${hasNum(i.value) ? money(i.value * i.qty) : "—"}</td><td>${money(i.price)}</td>` : ""}<td><button class="btn small secondary" onclick="editItem(${i.id})">Edit</button></td></tr>`,
+            `<tr><td>${esc(i.name)}${i.accessories?.length ? `<div class="acc-note">Accessories: ${i.accessories.map((a) => `${a.qty} × ${esc(a.item)}`).join(", ")}</div>` : ""}</td><td>${esc(i.category || "")}</td><td>${i.qty}</td><td>${i.service}</td><td>${availableToHire(i)}${setAside(db, i.name) ? ` <span class="muted">(${setAside(db, i.name)} kept in packages)</span>` : ""}</td><td>${weightText(i)}</td>${me.money ? `<td>${valueText(i)}</td><td>${hasNum(i.value) ? money(i.value * i.qty) : "—"}</td><td>${money(i.price)}</td>` : ""}<td><button class="btn small secondary" onclick="editItem(${i.id})">Edit</button></td></tr>`,
         )
         .join("")}</tbody></table></div>`;
 }
 // ---------- Accessories (other stock items that usually go out with this one) ----------
 let accDraft = [];
-const availableToHire = (i) => Math.max(0, (Number(i.qty) || 0) - (Number(i.service) || 0));
+const availableToHire = (i) => Math.max(0, (Number(i.qty) || 0) - (Number(i.service) || 0) - setAside(db, i.name));
 function accBox(id) {
   const self = db.inventory.find((x) => x.id === id);
   const options = db.inventory.filter((x) => x.id !== id && !accDraft.some((a) => a.item === x.name)).sort((a, b) => a.name.localeCompare(b.name));
@@ -118,6 +118,15 @@ function saveItem(e, id) {
     // Keep job kit lists and other items' accessories linked to the new name.
     db.jobs.forEach((j) => (j.kit || []).forEach((k) => k.item === i.name && (k.item = name)));
     db.inventory.forEach((x) => (x.accessories || []).forEach((a) => a.item === i.name && (a.item = name)));
+    db.crossHires.forEach((h) => h.item === i.name && (h.item = name));
+    db.jobs.forEach((j) => (j.kit || []).forEach((k) => k.accessoryOf === i.name && (k.accessoryOf = name)));
+  }
+  // A new hire price can update jobs that haven't been quoted yet (sent quotes and bookings keep their price).
+  if (!isNew && me.money && next.price !== undefined && Number(next.price) !== Number(i.price)) {
+    const same = (k) => (k.item === name || k.item === i.name) && Number(k.price) === Number(i.price);
+    const open = db.jobs.filter((j) => stageOf(j) === "enquiry" && (j.kit || []).some(same));
+    if (open.length && confirm(`Update the price of ${name} to ${money(next.price)} on ${open.length} enquir${open.length > 1 ? "ies" : "y"} not quoted yet (${open.map((j) => j.title).join(", ")})?`))
+      open.forEach((j) => j.kit.forEach((k) => same(k) && (k.price = Number(next.price))));
   }
   if (isNew) db.inventory.push(next);
   else {
@@ -133,7 +142,9 @@ function deleteEquipment(id) {
   if (db.jobs.some((j) => (j.kit || []).some((k) => k.item === i.name))) return alert(i.name + " is on a job's kit list. Remove it from those jobs first.");
   const usedBy = allocatedTo(db.inventory, i.name);
   if (usedBy.length) return alert(i.name + " is an accessory of " + usedBy.map((u) => u.main).join(", ") + ". Remove it from there first.");
-  if (!confirm("Delete " + i.name + " from the inventory?")) return;
+  const inPackages = db.packages.filter((p) => p.items.some((k) => String(k.id) === String(id)));
+  if (!confirm("Delete " + i.name + " from the inventory?" + (inPackages.length ? `\n\nIt will also be taken out of ${inPackages.length} package${inPackages.length > 1 ? "s" : ""}: ${inPackages.map((p) => p.name).join(", ")}.` : ""))) return;
+  inPackages.forEach((p) => (p.items = p.items.filter((k) => String(k.id) !== String(id))));
   db.inventory = db.inventory.filter((x) => x.id !== id);
   $("itemDialog")?.remove();
   save();

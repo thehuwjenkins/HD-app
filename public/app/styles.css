@@ -716,3 +716,4 @@ body { background: var(--bg); }
 .send-dialog { max-width: 760px; margin: auto; }
 .accepted-line { font-size: 13px; color: #0f6138; margin-top: 6px; }
 .accepted-line.muted { color: var(--muted); }
+.col-link { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-decoration: underline; text-decoration-color: #c9b6f7; text-underline-offset: 4px; } .board-card .tag { align-self: flex-start; margin-top: 4px; }

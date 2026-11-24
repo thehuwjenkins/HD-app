@@ -73,10 +73,10 @@ function overview() {
     ${stat("This week", f.week.length, f.week.length ? fmtDay(f.wkFrom, { day: "numeric", month: "short" }) + " – " + fmtDay(f.wkTo, { day: "numeric", month: "short" }) : "No jobs this week", "go('Calendar')")}
     ${stat("Kit shortages", f.short.length, f.short.length ? "jobs can't be fully supplied" : "All jobs covered", "go('Cross-hire')", f.short.length)}
     ${stat("Tasks due", f.dueSoon.length, f.overdue.length ? f.overdue.length + " overdue · " + f.open.length + " open" : f.open.length + " open in total", "go('My Workday')", f.overdue.length)}
-    ${stat("Outstanding quotes", f.quotes.length, money(f.quotes.reduce((s, j) => s + jobValue(j), 0)) + " awaiting a decision", "go('Pipeline')")}
+    ${stat("Outstanding quotes", f.quotes.length, money(f.quotes.reduce((s, j) => s + jobValue(j), 0)) + " awaiting a decision", "showJobs('quote')")}
   </div>
   <p class="hint" style="margin:0 0 6px">Pipeline · ${money(monthBooked.reduce((s, j) => s + jobValue(j), 0))} booked for ${fmtDay(f.today, { month: "long" })} (excluding VAT, not payments received)</p>
-  <div class="strip" aria-label="Pipeline">${STAGES.map((s) => `<button data-stage="${s}" onclick="go('Pipeline')"><b>${f.byStage[s].length}</b><span>${STAGE_LABELS[s]}</span></button>`).join("")}</div>
+  <div class="strip" aria-label="Pipeline">${STAGES.map((s) => `<button data-stage="${s}" onclick="showJobs('${s}')" title="Show ${STAGE_LABELS[s]} jobs"><b>${f.byStage[s].length}</b><span>${STAGE_LABELS[s]}</span></button>`).join("")}</div>
   <div class="cols">
     ${panel("This week", f.week.length ? f.week.map(jobRow).join("") : '<p class="empty">No jobs this week.</p>')}
     ${panel(

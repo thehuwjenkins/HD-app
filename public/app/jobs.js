@@ -212,28 +212,60 @@ function saveJob(e) {
       return;
     }
   }
-  if (editingJob) {
-    let i = db.jobs.findIndex((x) => x.id === editingJob);
-    db.jobs[i] = { ...db.jobs[i], ...j };
-  } else db.jobs.push({ id: uid(), ...j });
+  // Changing the Stage box runs the same workflow step as the next-step buttons (dates stamped, invoice
+  // created when booked), and the linked event plan picks up the new name, dates and venue.
+  const old = editingJob ? db.jobs.find((x) => x.id === editingJob) : null;
+  const fromStage = old ? stageOf(old) : "enquiry";
+  let saved = old ? { ...old, ...j } : { id: uid(), ...j };
+  if (j.stage !== fromStage) saved = stagedJob({ ...saved, stage: fromStage, booking: STAGE_BOOKING[fromStage] }, j.stage);
+  if (old) db.jobs[db.jobs.indexOf(old)] = saved;
+  else db.jobs.push(saved);
+  syncPlanFromJob(old, saved);
   editingJob = null;
   draftKit = [];
   save();
   render();
+}
+// Keep a job's event plan in step: if the plan still matched the job's old name, dates or venue, it
+// follows the change (and its checklist deadlines move with the event date).
+function syncPlanFromJob(old, j) {
+  const plan = db.plans.find((p) => p.jobId === j.id);
+  if (!plan) return;
+  const day = (s) => String(s || "").slice(0, 10);
+  if (!old || plan.title === old.title) plan.title = j.title;
+  if (!old || !plan.venue || plan.venue === (old.venue || "")) plan.venue = j.venue || "";
+  if (day(j.start) && (!plan.eventDate || !old || plan.eventDate === day(old.start)) && plan.eventDate !== day(j.start)) {
+    if (plan.eventDate) {
+      const shift = Math.round((dayMs(day(j.start)) - dayMs(plan.eventDate)) / DAY);
+      plan.stages.forEach((s) => s.items.forEach((i) => i.due && (i.due = addDays(i.due, shift))));
+    }
+    plan.eventDate = day(j.start);
+  }
+  if (day(j.end) && (!old || !plan.endDate || plan.endDate === day(old.end))) plan.endDate = day(j.end) !== plan.eventDate ? day(j.end) : "";
 }
 function jobShortages(j) {
   return shortages(j, db);
 }
 function allShortages() {
   return db.jobs.flatMap((j) =>
-    jobShortages(j).map((s) => ({ ...s, job: j.title, start: j.start, end: j.end })),
+    jobShortages(j).map((s) => ({ ...s, job: j.title, jobId: j.id, start: j.start, end: j.end })),
   );
 }
 function deleteJob(id) {
+  const j = db.jobs.find((x) => x.id === id);
+  if (!j) return;
+  // Everything that belongs to the job goes with it.
   const plan = db.plans.find((p) => p.jobId === id);
-  if (!confirm("Delete this job?" + (plan ? " Its event plan “" + plan.title + "” will be deleted too." : "") + " You can undo this from History & backups.")) return;
+  const invites = db.crewInvites.filter((i) => String(i.jobId) === String(id));
+  const reports = db.jobReports.filter((r) => String(r.jobId) === String(id));
+  const hires = db.crossHires.filter((h) => String(h.jobId) === String(id) || (!h.jobId && h.job === j.title));
+  const also = [plan ? `its event plan “${plan.title}”` : "", invites.length ? `${invites.length} crew booking${invites.length > 1 ? "s" : ""}` : "", reports.length ? `${reports.length} crew report${reports.length > 1 ? "s" : ""}` : "", hires.length ? `${hires.length} cross-hire note${hires.length > 1 ? "s" : ""}` : ""].filter(Boolean);
+  if (!confirm(`Delete ${j.title}?` + (also.length ? `\n\nThis also deletes ${also.join(", ")}.` : "") + (j.quoteToken ? "\n\nThe client's quote link will stop working." : "") + "\n\nYou can undo this from History & backups.")) return;
   if (plan) db.plans = db.plans.filter((p) => p !== plan);
-  db.jobs = db.jobs.filter((j) => j.id !== id);
+  db.crewInvites = db.crewInvites.filter((i) => !invites.includes(i));
+  db.jobReports = db.jobReports.filter((r) => !reports.includes(r));
+  db.crossHires = db.crossHires.filter((h) => !hires.includes(h));
+  db.jobs = db.jobs.filter((x) => x.id !== id);
   if (editingJob === id) {
     editingJob = null;
     draftKit = [];
@@ -244,8 +276,10 @@ function deleteJob(id) {
 function duplicateJob(id) {
   let j = db.jobs.find((j) => j.id === id);
   if (!j) return;
+  // A fresh enquiry: same kit and details, but none of the original's quote, acceptance or invoice.
+  const { quoteToken, quoteSentAt, acceptedAt, acceptedBy, acceptedVia, needsBooking, invoiceNo, invoiceDate, invoiceSentAt, hiredOutAt, returnedAt, invoicedAt, ...rest } = j;
   let copy = {
-    ...j,
+    ...rest,
     booking: "Draft",
     stage: "enquiry",
     id: uid(),

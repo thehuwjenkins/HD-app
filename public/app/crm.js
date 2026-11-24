@@ -18,7 +18,7 @@ function crm() {
     let related = db.jobs.filter(
       (j) => String(j.clientId) === String(c.id) || (!j.clientId && j.client === c.name),
     );
-    return `<div class="toolbar"><button class="btn secondary" onclick="activeClient=null;render()">← All contacts</button></div>${panel("Contact · " + esc(c.name), `<div class="jobmeta"><div><b>Company</b><p>${esc(c.company || "—")}</p></div><div><b>Email</b><p>${esc(c.email || "—")}</p></div><div><b>Phone</b><p>${esc(c.phone || "—")}</p></div></div><div class="toolbar" style="margin-top:16px"><select class="field" style="max-width:220px" id="clientAction"><option value="quote">New quote</option><option value="invoice">New invoice</option></select><button class="btn" onclick="clientAction()">Create</button><button class="btn secondary" onclick="newClientJob(${c.id})">New job</button></div><p class="hint">Invoice creation is planned for the hosted version. Quotes are built from a job.</p>`)}${panel("Jobs attached to this contact", related.length ? related.map((j) => row(`<b>${esc(j.title)}</b><div class="muted">${esc(j.start)} · ${esc(j.venue)}</div>`, `<button class="btn secondary" onclick="go('Jobs');editJob(${j.id})">Open</button>`)).join("") : '<p class="muted">No jobs linked to this contact yet.</p>')}`;
+    return `<div class="toolbar"><button class="btn secondary" onclick="activeClient=null;render()">← All contacts</button></div>${panel("Contact · " + esc(c.name), `<div class="jobmeta"><div><b>Company</b><p>${esc(c.company || "—")}</p></div><div><b>Email</b><p>${esc(c.email || "—")}</p></div><div><b>Phone</b><p>${esc(c.phone || "—")}</p></div><div><b>Address</b><p>${esc(c.address || "—")}</p></div></div><div class="toolbar" style="margin-top:16px"><button class="btn" onclick="newClientJob(${c.id})">New job for this client</button><button class="btn secondary" onclick="editClient(${c.id})">Edit contact</button><button class="btn danger" onclick="deleteClient(${c.id})">Delete contact</button></div><p class="hint">Quotes and invoices are made from the job, so they always match its kit and prices.</p>`)}${panel("Jobs for this contact", related.length ? related.map((j) => row(`<b>${esc(j.title)}</b><div class="muted">${esc(fmtRange(j))}${j.venue ? " · " + esc(j.venue) : ""}</div>`, `${stageTag(j)} <button class="btn small secondary" onclick="openJob(${j.id})">Open</button>`)).join("") : '<p class="muted">No jobs linked to this contact yet.</p>')}`;
   }
   return panel(
     "Contacts",
@@ -67,6 +67,48 @@ function newClientJob(id) {
   go("Jobs");
   let f = $("jobForm");
   if (f) f.elements.clientId.value = id;
+}
+// Edit a contact: its jobs show the new name straight away.
+function editClient(id) {
+  const c = db.clients.find((x) => x.id === id);
+  const root = document.createElement("div");
+  root.className = "modal";
+  root.id = "clientDialog";
+  const f = (k, l, type = "text") => `<label><span class="muted">${l}</span><input class="field" name="${k}" type="${type}" value="${esc(c[k] || "")}" ${k === "name" ? "required" : ""}></label>`;
+  root.innerHTML = `<form class="panel" onsubmit="saveClient(event,${id})"><div class="line"><h2 style="margin:0">Edit contact</h2><button type="button" class="btn small ghost" onclick="$('clientDialog').remove()">Close</button></div>
+    <div class="form" style="margin-top:14px">${f("name", "Contact name")}${f("company", "Company")}${f("email", "Email", "email")}${f("phone", "Phone", "tel")}<label class="wide"><span class="muted">Postal address</span><textarea class="field" name="address" rows="2">${esc(c.address || "")}</textarea></label></div>
+    <button class="btn big" type="submit">Save contact</button></form>`;
+  document.body.appendChild(root);
+}
+function saveClient(e, id) {
+  e.preventDefault();
+  const c = db.clients.find((x) => x.id === id),
+    d = data(e),
+    oldName = c.name;
+  Object.assign(c, { name: d.name.trim(), company: d.company.trim(), email: d.email.trim(), phone: d.phone.trim(), address: d.address.trim() });
+  db.jobs.forEach((j) => {
+    if (String(j.clientId) === String(id) || (!j.clientId && j.client === oldName)) {
+      j.client = c.name;
+      j.clientId ??= c.id;
+    }
+  });
+  $("clientDialog").remove();
+  save();
+  render();
+}
+// Delete a contact. Their jobs keep the name (for invoices already sent) but are no longer linked.
+function deleteClient(id) {
+  const c = db.clients.find((x) => x.id === id);
+  const jobs = db.jobs.filter((j) => String(j.clientId) === String(id));
+  if (!confirm(`Delete ${c.name}?` + (jobs.length ? `\n\n${jobs.length} job${jobs.length > 1 ? "s keep" : " keeps"} the name "${c.name}" but will no longer be linked to a contact, so quotes and invoices won't show their email or address.` : ""))) return;
+  jobs.forEach((j) => {
+    j.client = c.name;
+    delete j.clientId;
+  });
+  db.clients = db.clients.filter((x) => x.id !== id);
+  activeClient = null;
+  save();
+  render();
 }
 function addClient(e) {
   e.preventDefault();

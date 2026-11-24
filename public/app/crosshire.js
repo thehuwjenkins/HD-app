@@ -7,7 +7,7 @@ function crossHire() {
         ? shortages
             .map(
               (s) =>
-                `<div class="jobcard"><b>${esc(s.name)}</b><p class="muted">${esc(s.job)} · ${esc(s.start)}–${esc(s.end)}</p><span class="tag warning">Short ${s.short} · Need ${s.required}, own ${s.owned}</span><div class="toolbar"><button class="btn secondary" onclick="planCrossHire('${encodeURIComponent(s.name).replace(/'/g, "%27")}','${encodeURIComponent(s.job).replace(/'/g, "%27")}',${s.short})">Plan cross-hire</button></div></div>`,
+                `<div class="jobcard"><b>${esc(s.name)}</b><p class="muted">${esc(s.job)} · ${esc(s.start)}–${esc(s.end)}</p><span class="tag warning">Short ${s.short} · Need ${s.required}, own ${s.owned}</span><div class="toolbar"><button class="btn secondary" onclick="planCrossHire('${encodeURIComponent(s.name).replace(/'/g, "%27")}','${encodeURIComponent(s.job).replace(/'/g, "%27")}',${s.short},${s.jobId})">Plan cross-hire</button></div></div>`,
             )
             .join("")
         : '<p class="empty">No current shortages detected.</p>') +
@@ -15,18 +15,19 @@ function crossHire() {
       (db.crossHires
         .map(
           (h) =>
-            `<div class="jobcard"><b>${esc(h.item)}</b> · ${h.qty} required<p class="muted">${esc(h.job)} · ${esc(h.supplier || "Supplier not assigned")} · ${esc(h.status)}</p><button class="btn secondary" onclick="removeCrossHire(${h.id})">Remove</button></div>`,
+            `<div class="jobcard"><b>${esc(h.item)}</b> · ${h.qty} required<p class="muted">${esc(db.jobs.find((j) => j.id === h.jobId)?.title || h.job)} · ${esc(h.supplier || "Supplier not assigned")} · ${esc(h.status)}</p><button class="btn secondary" onclick="removeCrossHire(${h.id})">Remove</button></div>`,
         )
         .join("") || '<p class="hint">No cross-hire requests recorded.</p>'),
   );
 }
-function planCrossHire(item, job, qty) {
+function planCrossHire(item, job, qty, jobId) {
   let supplier = prompt("Supplier name (optional):", "");
   if (supplier === null) return;
   db.crossHires.push({
     id: uid(),
     item: decodeURIComponent(item),
     job: decodeURIComponent(job),
+    jobId,
     qty,
     supplier,
     status: "Planned — not ordered",

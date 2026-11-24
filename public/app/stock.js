@@ -26,18 +26,31 @@ export function allocated(inventory,name){
 export function allocatedTo(inventory,name){
   const out=[];for(const i of inventory||[])for(const a of i.accessories||[])if(a.item===name)out.push({main:i.name,qty:(Number(a.qty)||0)*(Number(i.qty)||0)});return out;
 }
+// Packages marked "keep this kit together" (e.g. a built PA rack): their contents are always set aside
+// from hire stock, and the package itself can be on only one booked job at a time.
+export function setAside(state,name){
+  let n=0;
+  for(const p of state.packages||[])if(p.keepTogether)for(const k of p.items||[]){const i=(state.inventory||[]).find(x=>String(x.id)===String(k.id));if(i&&i.name===name)n+=Number(k.qty)||0;}
+  return n;
+}
 export function shortages(job, state) {
   const [start,end] = bounds(job);
   const issues = [];
   const needed = new Map();
   for (const line of job.kit) {
-    if (!line.external) needed.set(line.item,(needed.get(line.item)||0)+line.qty);
+    if (!line.external && !line.kept) needed.set(line.item,(needed.get(line.item)||0)+line.qty);
+  }
+  // A kept-together package is one rig: clash if another booked job overlapping these dates has it too.
+  for (const pkgId of new Set(job.kit.filter(k=>k.kept&&k.pkgId).map(k=>String(k.pkgId)))) {
+    const p=(state.packages||[]).find(x=>String(x.id)===pkgId);
+    const clash=state.jobs.filter(j=>j.id!==job.id&&j.booking==='Reserved'&&j.kit.some(k=>k.kept&&String(k.pkgId)===pkgId)).filter(j=>{const t=bounds(j);return t[0]<end&&t[1]>start;});
+    if(clash.length)issues.push({name:(p?.name||'Package')+' (kept together)',required:1+clash.length,owned:1,short:clash.length,conflicts:clash.map(j=>j.title)});
   }
   for (const [name, quantity] of needed) {
     const item = state.inventory.find(i=>i.name===name);
-    const owned = item ? item.qty-item.service : 0;
+    const owned = item ? item.qty-item.service-setAside(state,name) : 0;
     const other = state.jobs.filter(j=>j.id!==job.id && j.booking==='Reserved')
-      .map(j=>({title:j.title,time:bounds(j),qty:j.kit.filter(k=>!k.external && k.item===name).reduce((n,k)=>n+k.qty,0)}))
+      .map(j=>({title:j.title,time:bounds(j),qty:j.kit.filter(k=>!k.external && !k.kept && k.item===name).reduce((n,k)=>n+k.qty,0)}))
       .filter(j=>j.qty && j.time[0]<end && j.time[1]>start);
     let peak = quantity, conflicts = [];
     for(const time of new Set([start,...other.map(j=>Math.max(start,j.time[0]))])) {
@@ -125,6 +138,10 @@ export function validate(state) {
         if(!Number.isSafeInteger(a.qty)||a.qty<1||a.qty>100)throw Error(item.name+' — accessory quantity must be 1 to 100');
       }
     }
+  }
+  for(const item of state.inventory){
+    const kept=setAside(state,item.name);
+    if(kept>item.qty-item.service)throw Error(item.name+' — '+kept+' kept together in packages but only '+(item.qty-item.service)+' in service');
   }
   for(const job of state.jobs){
     if(!['Draft','Reserved','Returned'].includes(job.booking)||!Array.isArray(job.kit)) throw Error('Invalid booking');
@@ -331,4 +348,4 @@ export function quoteSummary(job,{vatRegistered=false}={}){
 // Next invoice number: HD-1001, HD-1002, … (one higher than any used so far).
 export function nextInvoiceNo(jobs=[]){return 'HD-'+(jobs.reduce((m,j)=>Math.max(m,Number(String(j.invoiceNo||'').replace(/\D/g,''))||0),1000)+1);}
 // Shared with the browser: the owner page loads this file as a module and uses the same checks.
-if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, allocated, allocatedTo, lineAmount, quoteSummary, nextInvoiceNo, QUOTE_SECTIONS, inventoryTotals, loadCheck, parseTable, importRows, loadItems, packVehicle, planLoad, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});
+if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, setAside, allocated, allocatedTo, lineAmount, quoteSummary, nextInvoiceNo, QUOTE_SECTIONS, inventoryTotals, loadCheck, parseTable, importRows, loadItems, packVehicle, planLoad, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});
