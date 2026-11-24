@@ -23,7 +23,7 @@ td.num,th.num{text-align:right}td.box{width:44px;text-align:center}.box i{displa
 .sign{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:26px}.sign div{border-top:1px solid #111827;padding-top:4px;font-size:11px;color:#374151}
 .foot{margin-top:22px;padding-top:8px;border-top:1px solid #e5e7eb;font-size:10px;color:#6b7280}
 svg{max-width:100%;height:auto;display:block;margin:6px 0}.swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px}
-.stage-h{break-after:avoid}
+.stage-h{break-after:avoid}.lead-title{font:700 24px/1.2 Arial,sans-serif;margin:16px 0 14px}
 @media print{body{background:#fff}.actions{display:none!important}.sheet{box-shadow:none;margin:0;max-width:none;padding:0}
 @page{size:A4;margin:12mm}.logo,.ph:after,th,.cat td,.swatch,svg{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
 
@@ -31,7 +31,7 @@ const pDate = (d) => (d ? fmtDay(String(d).slice(0, 10), { day: "numeric", month
 const pMoney = (n) => "£" + (Number(n) || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // Open a document in a new tab. Returns the HTML (handy for checks).
-function printDocument(title, ref, body, { foot = "" } = {}) {
+function printDocument(title, ref, body, { foot = "", lead = "" } = {}) {
   const info = db.company || {};
   const logo = db.branding?.logo;
   const contact = [info.address, [info.phone, info.email].filter(Boolean).join(" · "), info.website].filter(Boolean).map(esc).join("<br>");
@@ -39,7 +39,7 @@ function printDocument(title, ref, body, { foot = "" } = {}) {
   <div class="actions"><button onclick="print()">Print / Save as PDF</button><button class="plain" onclick="close()">Close</button></div>
   <div class="sheet"><div class="ph"><div>${logo ? `<span class="logo"><img src="${esc(new URL(logo, location.href).href)}" alt="${esc(info.name || "HD Events")}"></span>` : `<span class="brand">${esc(info.name || "HD EVENTS")}</span>`}<div class="co">${contact}</div></div>
   <div class="ph-right"><h1>${esc(title.toUpperCase())}</h1>${ref ? `<div>${esc(ref)}</div>` : ""}<div>Printed ${esc(pDate(todayKey()))}</div></div></div>
-  ${body}<div class="foot">${foot || esc(info.name || "HD Events")}${info.companyNumber ? " · Company no. " + esc(info.companyNumber) : ""}${info.vatNumber ? " · VAT no. " + esc(info.vatNumber) : ""}</div></div></body></html>`;
+  ${lead ? `<div class="lead-title">${esc(lead)}</div>` : ""}${body}<div class="foot">${foot || esc(info.name || "HD Events")}${info.companyNumber ? " · Company no. " + esc(info.companyNumber) : ""}${info.vatNumber ? " · VAT no. " + esc(info.vatNumber) : ""}</div></div></body></html>`;
   const w = window.open("", "_blank");
   if (!w) {
     alert("Please allow pop-ups for this site to open printable documents.");
@@ -113,8 +113,15 @@ function printJob(id) {
 
 // Category totals for quotes and invoices (unit prices stay internal).
 function jobTotals(j) {
-  const totals = cats
-    .map((cat) => ({ name: cat, total: (j.kit || []).filter((k) => (k.category || "Audio") === cat).reduce((s, k) => s + (Number(k.qty) || 0) * (Number(k.price) || 0), 0) }))
+  // Every line counts, whatever its category (standard categories first, in their usual order).
+  const sums = new Map();
+  for (const k of j.kit || []) {
+    const c = k.category || "Audio";
+    sums.set(c, (sums.get(c) || 0) + (Number(k.qty) || 0) * (Number(k.price) || 0));
+  }
+  const totals = [...sums]
+    .sort(([a], [b]) => (cats.indexOf(a) + 1 || 99) - (cats.indexOf(b) + 1 || 99))
+    .map(([name, total]) => ({ name, total }))
     .filter((x) => x.total > 0);
   const sub = totals.reduce((s, x) => s + x.total, 0),
     discount = Math.min(sub, Number(j.discount) || 0),
@@ -163,12 +170,17 @@ function printInvoice(id) {
     t = jobTotals(j);
   const days = Number(info.paymentDays) || 30,
     due = addDays(j.invoiceDate, days);
-  const body = `<div class="grid"><div><h3>Bill to</h3>${billTo(j)}</div><div><h3>Invoice details</h3><b>Invoice no.</b> ${esc(j.invoiceNo)}<br><b>Invoice date</b> ${esc(pDate(j.invoiceDate))}<br><b>Payment due</b> ${esc(pDate(due))} (${days} days)<br><b>Event</b> ${esc(j.title)}, ${esc(fmtRange(j))}</div></div>
-    <h2>Services</h2><table><thead><tr><th>Description</th><th class="num">Amount</th></tr></thead><tbody>${t.totals.map((x) => `<tr><td>${esc(x.name)}${j.venue ? " · " + esc(j.venue) : ""}</td><td class="num">${pMoney(x.total)}</td></tr>`).join("") || '<tr><td colspan="2">No priced items on this job.</td></tr>'}</tbody></table>
+  // One row per priced line: quantity, price each, line total.
+  const lines = (j.kit || []).filter((k) => (Number(k.price) || 0) > 0);
+  const rows = lines
+    .map((k) => `<tr><td>${esc(k.item)}</td><td class="num">${Number(k.qty) || 0}</td><td class="num">${pMoney(k.price)}</td><td class="num">${pMoney((Number(k.qty) || 0) * (Number(k.price) || 0))}</td></tr>`)
+    .join("");
+  const body = `<div class="grid"><div><h3>Bill to</h3>${billTo(j)}</div><div><h3>Invoice details</h3><b>Invoice no.</b> ${esc(j.invoiceNo)}<br><b>Invoice date</b> ${esc(pDate(j.invoiceDate))}<br><b>Payment due</b> ${esc(pDate(due))} (${days} days)<br><b>Event dates</b> ${esc(fmtRange(j))}${j.venue ? `<br><b>Venue</b> ${esc(j.venue)}` : ""}</div></div>
+    <h2>Services</h2><table><thead><tr><th>Description</th><th class="num" style="width:12%">Qty</th><th class="num" style="width:18%">Price each</th><th class="num" style="width:18%">Total</th></tr></thead><tbody>${rows || '<tr><td colspan="4">No priced items on this job.</td></tr>'}</tbody></table>
     ${totalsTable(t)}
     <h2>How to pay</h2><div class="note">${info.bankDetails ? esc(info.bankDetails) : '<span class="warn">Add your bank details under Branding before sending this invoice.</span>'}
 Please use ${esc(j.invoiceNo)} as the payment reference.${info.paymentTerms ? "\n" + esc(info.paymentTerms) : ""}${info.vatNumber ? "" : "\nNot VAT registered: no VAT has been charged."}</div>`;
-  return printDocument("Invoice", j.invoiceNo, body);
+  return printDocument("Invoice", j.invoiceNo, body, { lead: j.title });
 }
 
 // ---------- Inventory ----------
