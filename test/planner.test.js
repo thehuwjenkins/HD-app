@@ -124,3 +124,15 @@ test('owner page loads the planner and sends only its origin as referrer', async
   const html = await r.text();
   for (const f of ['planner-template.js', 'planner.js', 'sitemap.js', 'creative.js']) assert.match(html, new RegExp('/app/' + f));
 });
+
+test('with no static assets binding, app files come from the bundle, still behind sign-in', async () => {
+  const e = await env({ASSETS: undefined});
+  const r = await call(e, 'huw@example.com', 'GET', '/app/planner-compliance.js');
+  assert.equal(r.status, 200);
+  assert.match(r.headers.get('content-type'), /javascript/);
+  assert.match(await r.text(), /function planCompliance/);
+  const logo = await call(e, 'huw@example.com', 'GET', '/logo.png');
+  assert.equal(logo.headers.get('content-type'), 'image/png');
+  assert.equal((await call(e, 'huw@example.com', 'GET', '/app/nope.js')).status, 404);
+  assert.equal((await worker.fetch(new Request(O + '/app/core.js'), e)).status, 403);
+});

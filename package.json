@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --no-warnings --import ./test/register.js --test test/*.test.js"
+    "test": "node --no-warnings --import ./test/register.js --test test/*.test.js",
+    "build": "node tools/bundle-static.mjs",
+    "deploy": "npm run build && npm test && wrangler deploy"
   }
 }

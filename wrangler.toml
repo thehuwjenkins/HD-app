@@ -8,14 +8,12 @@ workers_dev = false
 # The app lives at hq.hd-events.co.uk, behind Cloudflare Access (Zero Trust) sign-in.
 routes = [{ pattern = "hq.hd-events.co.uk", custom_domain = true }]
 
-[assets]
-directory = "./public"
-binding = "ASSETS"
-run_worker_first = true
+# App code, styles and logo are bundled into the worker (npm run build) rather than uploaded as
+# separate static assets, so every request goes through the sign-in check in the worker.
 
 [vars]
-ACCESS_TEAM = "SET-AFTER-ZERO-TRUST"
-ACCESS_AUD = "SET-AFTER-ZERO-TRUST"
+ACCESS_TEAM = "billowing-wind-e033"
+ACCESS_AUD = "5889ce9ce894589605e4a45abfbab3ac96d710a77554b53f828e018cbc3a69b4"
 OWNER_EMAIL = "huw@hd-events.co.uk"
 
 [[d1_databases]]

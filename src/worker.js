@@ -5,6 +5,13 @@ import {storeFile,serveFile,MAX_FILE} from './files.js';
 import {migrate} from './migrate.js';
 import {generateImage} from './ai.js';
 import {crewPage,upgradePage} from './pages.js';
+import {STATIC} from './static.gen.js';
+// App code, styles and logo bundled into the worker (see tools/bundle-static.mjs).
+function bundled(path){
+  const f=Object.hasOwn(STATIC,path)?STATIC[path]:null;
+  if(!f)return reply('Not found',404);
+  return reply(Uint8Array.from(atob(f.b64),c=>c.charCodeAt(0)),200,f.type,{'cache-control':'private, no-cache'});
+}
 import template from './owner.html';
 
 const headers={'cache-control':'private, no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','x-frame-options':'DENY','strict-transport-security':'max-age=31536000',
@@ -101,7 +108,7 @@ async fetch(req,env){
   if(path.startsWith('/api/'))return api(req,env,url,email,owner);
   if(req.method!=='GET')return reply('Not found',404);
   // App code, styles and the logo: any signed-in person may load them (they hold no business data).
-  if(path.startsWith('/app/')||path==='/logo.png')return env.ASSETS.fetch(req);
+  if(path.startsWith('/app/')||path==='/logo.png')return env.ASSETS?env.ASSETS.fetch(req):bundled(path);
   if(path.startsWith('/files/'))return serveFile(env,path);
   if(path!=='/')return reply('Not found',404);
 

@@ -92,3 +92,19 @@ Then do the restore drill in `RESTORE.md` once.
   brings the old app back exactly as it was.
 - **After the upgrade:** use **History & backups** (see `RESTORE.md`). The pre-upgrade backup is listed under
   `manual/`.
+
+## Live setup (November 2026)
+
+- **Address:** https://hq.hd-events.co.uk. This is a Workers custom domain on the hd-events.co.uk zone.
+- **Worker:** `hd-events-hq`
+- **Database:** D1 `hd-hq`
+- **Storage:** R2 buckets `hd-events-hq-backups` and `hd-events-hq-files`
+- **Daily backup:** runs at 02:17 UTC.
+- **Sign-in:** Cloudflare Access, team `billowing-wind-e033`.
+  - Application: "HD Events HQ". Login is by email code.
+  - Policy: anyone who proves their email gets past Access. The worker then decides what they see:
+    - the owner gets the full app;
+    - emails listed under Staff get "My jobs" only;
+    - everyone else is refused.
+- **App files:** the files in `public/` are bundled into the worker (`npm run build` writes `src/static.gen.js`) rather than uploaded as static assets. A test fails if the bundle is out of date.
+- **Deploy:** run `npm run deploy`. This builds, tests, then runs `wrangler deploy`.
