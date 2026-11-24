@@ -572,9 +572,6 @@ h2, h3 { color: #0b1220; }
 .modal .panel, #hqSafety .panel { box-shadow: 0 20px 60px #0f163040; }
 .toast { background: #0f1630; color: #fff; border: 1px solid #0f1630; }
 .toast b { color: #7ff3f2; }
-.site-pin span { background: transparent; box-shadow: none; }
-.pin-code { display: inline-grid; place-items: center; min-width: 30px; height: 30px; padding: 0 5px; border-radius: 15px; color: #fff; font: 700 11px/1 'DM Sans', Arial, sans-serif; letter-spacing: .02em; border: 2px solid #fff; box-shadow: 0 1px 4px #0005; vertical-align: middle; }
-.palette .pin-code { min-width: 26px; height: 26px; margin-right: 4px; }
 .check-mark { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--border-strong); font-weight: 700; margin-right: 6px; vertical-align: middle; }
 .check-mark.ok { background: #15803d; border-color: #15803d; color: #fff; }
 .board-card .moves { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
@@ -582,3 +579,58 @@ h2, h3 { color: #0b1220; }
 .board-card .moves .btn { min-width: 0; width: 100%; padding-left: 4px; padding-right: 4px; }
 .board-card .moves .btn.ghost { font-size: 18px; border: 1px solid var(--border); background: #fff; }
 .no-photo { color: var(--muted); font-size: 13px; }
+.palette .pin-emoji { font-size: 16px; line-height: 1; }
+
+/* ======================================================================
+   Daytime brand theme: bright and clear for all-day use, with the logo's
+   cyan-to-purple used to highlight actions, progress and the current page.
+   ====================================================================== */
+:root {
+  --bg: #f5f7fb;
+  --brand-cyan: #00eeed;
+  --brand-purple: #9145ff;
+  --accent: #00808c;          /* cyan, deepened so white text on it is readable */
+  --purple: #6d35e8;          /* logo purple, deepened for text */
+  --brand-grad: linear-gradient(120deg, #00808c 0%, #2f6fd0 55%, #6d35e8 100%);
+  --brand-glow: linear-gradient(120deg, #00eeed, #9145ff);
+  --brand-tint: linear-gradient(120deg, #e6fbfb, #f1eaff);
+}
+body { background: var(--bg); }
+/* A thin logo-coloured line across the top of every page */
+.main { position: relative; }
+.main::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 4px; border-radius: 0 0 4px 4px; background: var(--brand-glow); }
+.eyebrow { background: var(--brand-grad); -webkit-background-clip: text; background-clip: text; color: transparent; font-weight: 800; }
+
+/* Primary buttons: logo gradient */
+.btn { background: var(--brand-grad); border: 0; color: #fff; box-shadow: 0 2px 6px #2f6fd026; }
+.btn:hover { box-shadow: 0 8px 22px #6d35e833; }
+.btn.secondary { background: #fff; color: #1b2436; border: 1.5px solid #c9d2df; box-shadow: none; }
+.btn.secondary:hover { border-color: var(--accent); color: var(--accent); }
+.btn.ghost { background: transparent; box-shadow: none; color: #2f3a4b; }
+.btn.danger { background: #fff; box-shadow: none; color: var(--danger); border: 1.5px solid #f0b8b0; }
+.board-card .moves .btn.ghost { background: #fff; }
+.view-switch button.active, .palette button.on { background: var(--brand-grad); color: #fff; border-color: transparent; }
+
+/* Sidebar: navy with the logo colours marking where you are */
+.side { background: #0f1630; }
+.side .nav.active { background: linear-gradient(90deg, #00eeed2e, #9145ff2e); box-shadow: inset 4px 0 0 var(--brand-cyan); color: #fff; }
+
+/* Tabs, progress and focus */
+.tabs button.active { color: #0b1220; border-bottom: 3px solid transparent; border-image: var(--brand-glow) 1; }
+.bar span { background: var(--brand-glow); }
+.ring-fg { stroke: #2f6fd0; }
+:focus-visible { outline: 3px solid #00c7c6; outline-offset: 2px; }
+.field:focus { border-color: #00a7b0; box-shadow: 0 0 0 3px #00eeed33; }
+.check-card:has(input:checked) { background: var(--brand-tint); border-color: #6d35e8; }
+.check-card input, .check { accent-color: #6d35e8; }
+
+/* Highlight panels */
+.stat { position: relative; overflow: hidden; }
+.stat::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 4px; background: var(--brand-glow); }
+.stat .label { color: var(--purple); }
+.next-action, .plan-hero, .countdown { background: var(--brand-tint); border: 1px solid #cfc2f7; }
+.plan-cover { background: var(--brand-glow) center / cover; color: #fff; }
+.why { background: #f3eeff; border-left: 4px solid var(--purple); }
+.tag.cert { background: #efe8ff; color: #5521b5; }
+.toast { background: #0f1630; border: 0; border-left: 4px solid var(--brand-cyan); }
+.profile-q { border: 0; padding: 0; } .profile-q legend { padding: 0; margin-bottom: 4px; }

@@ -1,28 +1,25 @@
 // Site map: satellite or street map of the venue, with stages, bars, toilets, fire points, fences and routes.
 // Uses Leaflet (loaded on first use) with Esri satellite imagery and OpenStreetMap; no API key needed.
 const SITE_KINDS = {
-  // [short code, name, colour] (safety signs: green = safe condition, red = fire)
-  stage: ["ST", "Stage", "#5b21b6"],
-  foh: ["FOH", "FOH / control", "#5b21b6"],
-  bar: ["BAR", "Bar", "#b45309"],
-  food: ["F", "Food", "#b45309"],
-  toilets: ["WC", "Toilets", "#1d4ed8"],
-  water: ["W", "Drinking water", "#0369a1"],
-  firstaid: ["FA", "First aid", "#15803d"],
-  firepoint: ["FP", "Fire point", "#b91c1c"],
-  exit: ["EX", "Emergency exit", "#15803d"],
-  assembly: ["AP", "Assembly point", "#15803d"],
-  entrance: ["IN", "Entrance", "#0f766e"],
-  security: ["SEC", "Security / control", "#334155"],
-  generator: ["GEN", "Generator / power", "#a16207"],
-  info: ["i", "Info point", "#1d4ed8"],
-  parking: ["P", "Parking", "#1d4ed8"],
-  camping: ["C", "Camping", "#4d7c0f"],
+  stage: ["🎤", "Stage"],
+  foh: ["🎛️", "FOH / control"],
+  bar: ["🍺", "Bar"],
+  food: ["🍔", "Food"],
+  toilets: ["🚻", "Toilets"],
+  water: ["💧", "Drinking water"],
+  firstaid: ["⛑️", "First aid"],
+  firepoint: ["🧯", "Fire point"],
+  exit: ["🚪", "Emergency exit"],
+  assembly: ["🟢", "Assembly point"],
+  entrance: ["🎟️", "Entrance"],
+  security: ["🛡️", "Security / control"],
+  generator: ["⚡", "Generator / power"],
+  info: ["ℹ️", "Info point"],
+  parking: ["🅿️", "Parking"],
+  camping: ["⛺", "Camping"],
 };
-const siteBadge = (k) => {
-  const [code, name, colour] = SITE_KINDS[k] || ["?", "Item", "#334155"];
-  return `<span class="pin-code" style="background:${colour}" aria-hidden="true" title="${name}">${code}</span>`;
-};
+// Map pins keep their picture icons: quick to spot on a satellite view.
+const siteBadge = (k) => `<span class="pin-emoji" aria-hidden="true">${(SITE_KINDS[k] || ["📍"])[0]}</span>`;
 const SITE_SHAPES = {
   arena: ["polygon", "#67d5ed", "Arena / audience area"],
   backstage: ["polygon", "#c4a1ff", "Backstage / production"],
