@@ -97,7 +97,7 @@ function nextActions(j) {
       enquiry: (canMoney ? b("Send quote", `sendToClient(${j.id},'quote')`) : "") + b("Mark quote as sent", `moveTo(${j.id},'quote')`, canMoney ? "secondary" : ""),
       quote: b("Mark as accepted", `acceptJob(${j.id})`) + (canMoney ? b("Resend quote", `sendToClient(${j.id},'quote')`, "secondary") : ""),
       booked: b("Print picking list", `printJob(${j.id})`) + b("Book out", `openBooking(${j.id},'out')`) + (owner ? b("Send invoice", `sendToClient(${j.id},'invoice')`, "secondary") : ""),
-      out: b("Book in", `openBooking(${j.id},'in')`) + b("Book out the rest", `openBooking(${j.id},'out')`, "secondary"),
+      out: b("Book in", `openBooking(${j.id},'in')`) + b("Book out the rest", `openBooking(${j.id},'out')`, "secondary") + (owner && !j.invoiceSentAt ? b("Send invoice", `sendToClient(${j.id},'invoice')`, "secondary") : ""),
       returned: (bookingProgress(j)?.still ? b("Book in missing kit", `openBooking(${j.id},'in')`, "secondary") : "") + (owner ? b("Send invoice", `sendToClient(${j.id},'invoice')`) : "") + b("Mark as invoiced", `moveTo(${j.id},'invoiced')`, owner ? "secondary" : ""),
       invoiced: "",
     }[st] || ""
@@ -126,6 +126,7 @@ function sendToClient(id, kind) {
   const j = db.jobs.find((x) => x.id === id);
   if (!j) return;
   if (kind === "invoice" && !j.invoiceNo) {
+    if (["enquiry", "quote"].includes(stageOf(j)) && !confirm(`${j.title} hasn't been accepted yet. Normally the invoice is created when the quote is accepted.\n\nCreate invoice ${nextInvoiceNo(db.jobs)} now anyway?`)) return;
     j.invoiceNo = nextInvoiceNo(db.jobs);
     j.invoiceDate = todayKey();
     save();

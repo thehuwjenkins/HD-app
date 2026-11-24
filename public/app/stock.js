@@ -52,6 +52,12 @@ export function movementTotals(job){
   for(const mv of job.movements||[]){const x=t[mv.item]??={out:0,in:0};x[mv.dir]+=Number(mv.qty)||0;}
   return t;
 }
+// Kit physically out right now (booked out, not yet booked back in), across all jobs.
+export function outNow(state,name){
+  const jobs=[];let n=0;
+  for(const j of state.jobs||[]){const q=outstandingQty(j,name);if(q){n+=q;jobs.push({title:j.title,id:j.id,qty:q});}}
+  return {qty:n,jobs};
+}
 export function outstandingQty(job,item){const x=movementTotals(job)[item];return x?Math.max(0,x.out-x.in):0;}
 export function shortages(job, state) {
   const [start,end] = bounds(job);
@@ -379,4 +385,4 @@ export function quoteSummary(job,{vatRegistered=false}={}){
 // Next invoice number: HD-1001, HD-1002, … (one higher than any used so far).
 export function nextInvoiceNo(jobs=[]){return 'HD-'+(jobs.reduce((m,j)=>Math.max(m,Number(String(j.invoiceNo||'').replace(/\D/g,''))||0),1000)+1);}
 // Shared with the browser: the owner page loads this file as a module and uses the same checks.
-if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, pickItems, movementTotals, outstandingQty, setAside, allocated, allocatedTo, lineAmount, quoteSummary, nextInvoiceNo, QUOTE_SECTIONS, inventoryTotals, loadCheck, parseTable, importRows, loadItems, packVehicle, planLoad, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});
+if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, outNow, pickItems, movementTotals, outstandingQty, setAside, allocated, allocatedTo, lineAmount, quoteSummary, nextInvoiceNo, QUOTE_SECTIONS, inventoryTotals, loadCheck, parseTable, importRows, loadItems, packVehicle, planLoad, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});

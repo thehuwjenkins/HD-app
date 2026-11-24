@@ -10,7 +10,7 @@ const hasNum = (v) => v !== undefined && v !== null && v !== "" && Number.isFini
 const weightText = (i) => (hasNum(i.weightKg) ? (i.weightEst ? "~" : "") + kg(i.weightKg) : "—");
 const valueText = (i) => (!me.money ? "—" : hasNum(i.value) ? (i.valueEst ? "~" : "") + money(i.value) : "—");
 function equipmentCard(i, add) {
-  return `<div class="equipment-card"><div class="equipment-photo">${equipmentImage(i)}</div><div class="equipment-body"><span class="tag cat-tag">${esc(i.category || "Uncategorised")}</span><strong>${esc(i.name)}</strong><div class="muted">${Number(i.qty) || 0} owned · ${weightText(i)} each${me.money ? " · hire " + money(i.price) : ""}</div>${i.accessories?.length ? `<div class="acc-note">Accessories: ${i.accessories.map((a) => `${a.qty} × ${esc(a.item)}`).join(", ")}</div>` : ""}${add ? `<button class="btn secondary" type="button" onclick="addKitById(${i.id})">+ Add to job</button>` : `<button class="btn secondary" type="button" onclick="editItem(${i.id})">Edit</button> <button class="btn secondary" onclick="pickEquipmentPhoto(${i.id})">Upload picture</button>`}</div></div>`;
+  return `<div class="equipment-card"><div class="equipment-photo">${equipmentImage(i)}</div><div class="equipment-body"><span class="tag cat-tag">${esc(i.category || "Uncategorised")}</span><strong>${esc(i.name)}</strong><div class="stock-line">${stockLine(i)}</div><div class="muted">${weightText(i)} each${me.money ? " · hire " + money(i.price) : ""}</div>${i.accessories?.length ? `<div class="acc-note">Accessories: ${i.accessories.map((a) => `${a.qty} × ${esc(a.item)}`).join(", ")}</div>` : ""}${add ? `<button class="btn secondary" type="button" onclick="addKitById(${i.id})">+ Add to job</button>` : `<button class="btn secondary" type="button" onclick="editItem(${i.id})">Edit</button> <button class="btn secondary" onclick="pickEquipmentPhoto(${i.id})">Upload picture</button>`}</div></div>`;
 }
 // Search by name and filter by category tag.
 function inventoryMatches() {
@@ -35,16 +35,27 @@ function inventoryResults(matches) {
   if (!matches.length) return `<p class="empty">${db.inventory.length ? "No equipment matches this search or category." : "No equipment yet. Press + Add equipment, or Import list."}</p>`;
   return inventoryView === "grid"
     ? `<div class="equipment-grid">${matches.map((i) => equipmentCard(i, false)).join("")}</div>`
-    : `<div class="tablewrap"><table><thead><tr><th>Equipment</th><th>Category</th><th>Owned</th><th>Out of service</th><th>To hire</th><th>Weight each</th>${me.money ? "<th>Value each</th><th>Total value</th><th>Hire price</th>" : ""}<th></th></tr></thead><tbody>${matches
+    : `<div class="tablewrap"><table><thead><tr><th>Equipment</th><th>Category</th><th>Owned</th><th>Available now</th><th>Weight each</th>${me.money ? "<th>Value each</th><th>Total value</th><th>Hire price</th>" : ""}<th></th></tr></thead><tbody>${matches
         .map(
           (i) =>
-            `<tr><td>${esc(i.name)}${i.accessories?.length ? `<div class="acc-note">Accessories: ${i.accessories.map((a) => `${a.qty} × ${esc(a.item)}`).join(", ")}</div>` : ""}</td><td>${esc(i.category || "")}</td><td>${i.qty}</td><td>${i.service}</td><td>${availableToHire(i)}${setAside(db, i.name) ? ` <span class="muted">(${setAside(db, i.name)} kept in packages)</span>` : ""}</td><td>${weightText(i)}</td>${me.money ? `<td>${valueText(i)}</td><td>${hasNum(i.value) ? money(i.value * i.qty) : "—"}</td><td>${money(i.price)}</td>` : ""}<td><button class="btn small secondary" onclick="editItem(${i.id})">Edit</button></td></tr>`,
+            `<tr><td>${esc(i.name)}${i.accessories?.length ? `<div class="acc-note">Accessories: ${i.accessories.map((a) => `${a.qty} × ${esc(a.item)}`).join(", ")}</div>` : ""}</td><td>${esc(i.category || "")}</td><td>${i.qty}</td><td>${stockLine(i)}</td><td>${weightText(i)}</td>${me.money ? `<td>${valueText(i)}</td><td>${hasNum(i.value) ? money(i.value * i.qty) : "—"}</td><td>${money(i.price)}</td>` : ""}<td><button class="btn small secondary" onclick="editItem(${i.id})">Edit</button></td></tr>`,
         )
         .join("")}</tbody></table></div>`;
 }
 // ---------- Accessories (other stock items that usually go out with this one) ----------
 let accDraft = [];
-const availableToHire = (i) => Math.max(0, (Number(i.qty) || 0) - (Number(i.service) || 0) - setAside(db, i.name));
+// Available right now: owned, minus out for service, kept together in packages, and booked out on jobs.
+const availableToHire = (i) => Math.max(0, (Number(i.qty) || 0) - (Number(i.service) || 0) - setAside(db, i.name) - outNow(db, i.name).qty);
+function stockLine(i) {
+  const out = outNow(db, i.name),
+    kept = setAside(db, i.name),
+    svc = Number(i.service) || 0;
+  const bits = [`<b class="avail ${availableToHire(i) ? "" : "none"}">${availableToHire(i)} available</b>`];
+  if (out.qty) bits.push(`<span class="out-now" title="${esc(out.jobs.map((j) => j.qty + " on " + j.title).join(", "))}">${out.qty} out${out.jobs.length === 1 ? " on " + esc(out.jobs[0].title) : ""}</span>`);
+  if (svc) bits.push(`${svc} in service`);
+  if (kept) bits.push(`${kept} kept in packages`);
+  return bits.join(" · ") + ` <span class="muted">of ${Number(i.qty) || 0}</span>`;
+}
 function accBox(id) {
   const self = db.inventory.find((x) => x.id === id);
   const options = db.inventory.filter((x) => x.id !== id && !accDraft.some((a) => a.item === x.name)).sort((a, b) => a.name.localeCompare(b.name));
@@ -156,18 +167,18 @@ function exportInventory() {
     const s = String(v ?? "");
     return /[",\n]/.test(s) || /^[=+\-@]/.test(s) ? '"' + (/^[=+\-@]/.test(s) ? "'" : "") + s.replace(/"/g, '""') + '"' : s;
   };
-  const head = ["Equipment", "Category", "Owned", "Out of service", "Length (cm)", "Width (cm)", "Height (cm)", "Weight each (kg)", "Weight estimated", "Total weight (kg)", ...(me.money ? ["Value each (£)", "Value estimated", "Total value (£)", "Hire price per day (£)"] : []), "Accessories", "Notes"];
+  const head = ["Equipment", "Category", "Owned", "Out of service", "Booked out now", "Available now", "Length (cm)", "Width (cm)", "Height (cm)", "Weight each (kg)", "Weight estimated", "Total weight (kg)", ...(me.money ? ["Value each (£)", "Value estimated", "Total value (£)", "Hire price per day (£)"] : []), "Accessories", "Notes"];
   const rows = [...db.inventory]
     .sort((a, b) => (a.category || "").localeCompare(b.category || "") || a.name.localeCompare(b.name))
     .map((i) => [
-      i.name, i.category || "", i.qty, i.service, i.lengthCm ?? "", i.widthCm ?? "", i.heightCm ?? "",
+      i.name, i.category || "", i.qty, i.service, outNow(db, i.name).qty, availableToHire(i), i.lengthCm ?? "", i.widthCm ?? "", i.heightCm ?? "",
       hasNum(i.weightKg) ? i.weightKg : "", i.weightEst ? "Yes" : "", hasNum(i.weightKg) ? Math.round(i.weightKg * i.qty * 10) / 10 : "",
       ...(me.money ? [hasNum(i.value) ? i.value : "", i.valueEst ? "Yes" : "", hasNum(i.value) ? Math.round(i.value * i.qty * 100) / 100 : "", Number(i.price) || 0] : []),
       (i.accessories || []).map((a) => a.qty + " x " + a.item).join("; "),
       i.notes || "",
     ]);
   const t = inventoryTotals(db.inventory);
-  rows.push([], ["TOTAL", "", t.units, "", "", "", "", "", "", t.weight, ...(me.money ? ["", "", t.value, ""] : []), "", ""]);
+  rows.push([], ["TOTAL", "", t.units, "", "", "", "", "", "", "", "", t.weight, ...(me.money ? ["", "", t.value, ""] : []), "", ""]);
   const csv = "\ufeff" + [head, ...rows].map((r) => r.map(cell).join(",")).join("\r\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));

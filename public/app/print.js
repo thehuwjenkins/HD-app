@@ -218,7 +218,7 @@ function printInventory() {
         list
           .map(
             (i) =>
-              `<tr><td>${esc(i.name)}${i.inCase ? ' <span class="muted">(in a case)</span>' : ""}${i.accessories?.length ? `<br><span class="muted">Accessories: ${i.accessories.map((x) => x.qty + " × " + esc(x.item)).join(", ")}</span>` : ""}</td><td class="num">${i.qty}${i.service ? ` <span class="warn">(${i.service} out of service)</span>` : ""}</td><td>${i.lengthCm ? `${i.lengthCm}×${i.widthCm}×${i.heightCm} cm` : ""}</td><td class="num">${weightText(i)}</td><td class="num">${hasNum(i.weightKg) ? kg(i.weightKg * i.qty) : ""}</td>${me.money ? `<td class="num">${valueText(i)}</td><td class="num">${hasNum(i.value) ? pMoney(i.value * i.qty) : ""}</td>` : ""}</tr>`,
+              `<tr><td>${esc(i.name)}${i.inCase ? ' <span class="muted">(in a case)</span>' : ""}${i.accessories?.length ? `<br><span class="muted">Accessories: ${i.accessories.map((x) => x.qty + " × " + esc(x.item)).join(", ")}</span>` : ""}</td><td class="num">${i.qty}${i.service ? ` <span class="warn">(${i.service} out of service)</span>` : ""}${outNow(db, i.name).qty ? `<br><span class="muted">${outNow(db, i.name).qty} booked out · ${availableToHire(i)} available</span>` : ""}</td><td>${i.lengthCm ? `${i.lengthCm}×${i.widthCm}×${i.heightCm} cm` : ""}</td><td class="num">${weightText(i)}</td><td class="num">${hasNum(i.weightKg) ? kg(i.weightKg * i.qty) : ""}</td>${me.money ? `<td class="num">${valueText(i)}</td><td class="num">${hasNum(i.value) ? pMoney(i.value * i.qty) : ""}</td>` : ""}</tr>`,
           )
           .join(""),
     )
