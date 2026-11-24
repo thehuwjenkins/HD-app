@@ -79,36 +79,57 @@ function jobInfoGrid(j) {
 }
 
 // ---------- Picking list (job sheet) ----------
+// Every piece of equipment going out, by section, with Out/Back ticks and the details needed to pick it.
 function printJob(id) {
   const j = db.jobs.find((x) => x.id === id);
   if (!j) return;
   const short = jobShortages(j);
   const inv = new Map(db.inventory.map((i) => [i.name, i]));
+  const kit = (j.kit || []).filter((k) => !isCrewLine(k));
+  const crew = (j.kit || []).filter(isCrewLine);
+  // Stock items and hired-in kit get picked; services like delivery are listed separately.
+  const service = (k) => !inv.has(k.item) && ["Transport", "Install"].includes(k.category);
   const byCat = {};
-  (j.kit || []).forEach((k) => (byCat[k.category || inv.get(k.item)?.category || "Audio"] ||= []).push(k));
+  kit.filter((k) => !service(k)).forEach((k) => (byCat[inv.get(k.item)?.category || k.category || "Audio"] ||= []).push(k));
+  const order = (c) => (cats.indexOf(c) + 1 || (c === "Cases" ? 50 : 99));
   const load = loadCheck(j, db.inventory, vehicleList());
+  let units = 0;
   const rows = Object.entries(byCat)
-    .map(
-      ([cat, lines]) =>
-        `<tr class="cat"><td colspan="6">${esc(cat)}</td></tr>` +
+    .sort(([a], [b]) => order(a) - order(b) || a.localeCompare(b))
+    .map(([cat, lines]) => {
+      const count = lines.reduce((n, k) => n + (Number(k.qty) || 0), 0);
+      units += count;
+      return (
+        `<tr class="cat"><td colspan="6">${esc(cat)} <span class="muted">· ${lines.length} line${lines.length > 1 ? "s" : ""}, ${count} item${count > 1 ? "s" : ""}</span></td></tr>` +
         lines
+          .sort((a, b) => a.item.localeCompare(b.item))
           .map((k) => {
             const i = inv.get(k.item) || {},
-              issue = short.find((s) => s.name === k.item);
-            const notes = [i.inCase ? "Packed inside another case" : "", issue ? `<span class="warn">SHORT ${issue.short}: cross-hire</span>` : "", k.external ? "Hired in / custom line" : ""].filter(Boolean).join(" · ");
-            return `<tr><td class="box"><i></i></td><td class="box"><i></i></td><td class="num"><b>${k.qty}</b></td><td>${esc(k.item)}</td><td class="num">${hasNum(i.weightKg) ? kg(i.weightKg * k.qty) : ""}</td><td>${notes}</td></tr>`;
+              issue = short.find((x) => x.name === k.item);
+            const details = [
+              !inv.has(k.item) ? "<b>Hired in / not in stock</b>" : "",
+              i.inCase ? "Packed inside another case" : i.lengthCm ? `Case ${i.lengthCm}×${i.widthCm}×${i.heightCm} cm` : "",
+              i.stackable === false ? "Don't stack on" : "",
+              i.notes ? esc(i.notes) : "",
+              issue ? `<span class="warn">SHORT ${issue.short}: cross-hire needed</span>` : "",
+            ].filter(Boolean).join(" · ");
+            return `<tr><td class="box"><i></i></td><td class="box"><i></i></td><td class="num"><b>${k.qty}</b></td><td><b>${esc(k.item)}</b></td><td>${details}</td><td class="num">${hasNum(i.weightKg) ? kg(i.weightKg * k.qty) : ""}</td></tr>`;
           })
-          .join(""),
-    )
+          .join("")
+      );
+    })
     .join("");
+  const services = kit.filter(service);
   const body = `${jobInfoGrid(j)}
-    <h2>Picking list</h2>
-    <table><thead><tr><th>Out</th><th>Back</th><th class="num">Qty</th><th>Equipment</th><th class="num">Weight</th><th>Notes</th></tr></thead><tbody>${rows || '<tr><td colspan="6">No equipment on this job yet.</td></tr>'}</tbody></table>
+    <h2>Equipment to pick · ${units} item${units === 1 ? "" : "s"}</h2>
+    <table><thead><tr><th>Out</th><th>Back</th><th class="num">Qty</th><th>Equipment</th><th>Details</th><th class="num">Weight</th></tr></thead><tbody>${rows || '<tr><td colspan="6">No equipment on this job yet.</td></tr>'}</tbody></table>
     <p>${load.kg ? `<b>Total kit weight:</b> ${kg(load.kg)}${load.payload ? ` of ${kg(load.payload)} payload ${load.over ? '<span class="warn">OVERLOADED</span>' : '<span class="ok">OK</span>'}` : ""}` : ""}${load.unknown.length ? ` <span class="muted">(${load.unknown.length} line${load.unknown.length > 1 ? "s" : ""} without a weight)</span>` : ""}</p>
-    ${short.length ? `<h2>Shortages / cross-hire</h2><p>${short.map((s) => `<span class="warn">${esc(s.name)}: ${s.short} short</span>`).join("<br>")}</p>` : ""}
+    ${crew.length || jobCrew(j).length ? `<h2>Crew</h2><p>${crew.map((k) => `<b>${esc(k.item)}</b>: ${crewQtyText(k)}`).join("<br>")}${jobCrew(j).length ? `${crew.length ? "<br>" : ""}<b>Named crew:</b> ${esc(jobCrew(j).join(", "))}` : ""}</p>` : ""}
+    ${services.length ? `<h2>Other services</h2><p>${services.map((k) => `${k.qty} × ${esc(k.item)}`).join("<br>")}</p>` : ""}
+    ${short.length ? `<h2>Shortages / cross-hire</h2><p>${short.map((x) => `<span class="warn">${esc(x.name)}: ${x.short} short</span>`).join("<br>")}</p>` : ""}
     ${j.notes ? `<h2>Crew and technical notes</h2><div class="note">${esc(j.notes)}</div>` : ""}
     <div class="sign"><div>Picked by / date</div><div>Checked out by / date</div><div>Returned and checked by / date</div></div>`;
-  return printDocument("Picking list", "Job " + j.id, body);
+  return printDocument("Picking list", "Job " + j.id, body, { lead: j.title });
 }
 
 // Category totals for quotes and invoices (unit prices stay internal).
@@ -117,7 +138,7 @@ function jobTotals(j) {
   const sums = new Map();
   for (const k of j.kit || []) {
     const c = k.category || "Audio";
-    sums.set(c, (sums.get(c) || 0) + (Number(k.qty) || 0) * (Number(k.price) || 0));
+    sums.set(c, (sums.get(c) || 0) + lineTotal(k));
   }
   const totals = [...sums]
     .sort(([a], [b]) => (cats.indexOf(a) + 1 || 99) - (cats.indexOf(b) + 1 || 99))
@@ -128,6 +149,16 @@ function jobTotals(j) {
     net = sub - discount;
   const vat = db.company?.vatNumber ? Math.round(net * 20) / 100 : 0;
   return { totals, sub, discount, net, vat, gross: net + vat };
+}
+// Quote and invoice lines: one row per equipment section; crew itemised (people × days/hours × rate).
+function billingTable(j) {
+  const t = jobTotals(j);
+  const crew = (j.kit || []).filter((k) => isCrewLine(k) && lineTotal(k) > 0);
+  const sections = t.totals.filter((x) => x.name !== CREW_CAT);
+  const rows =
+    sections.map((x) => `<tr><td>${esc(x.name)}${x.name === "Transport" || x.name === "Install" ? "" : " equipment"}</td><td></td><td></td><td class="num">${pMoney(x.total)}</td></tr>`).join("") +
+    (crew.length ? `<tr class="cat"><td colspan="4">Crew</td></tr>` + crew.map((k) => `<tr><td>${esc(k.item)}</td><td>${crewQtyText(k)}</td><td class="num">${pMoney(k.price)} / ${k.unit === "hour" ? "hour" : "day"}</td><td class="num">${pMoney(lineTotal(k))}</td></tr>`).join("") : "");
+  return `<table><thead><tr><th>Description</th><th style="width:20%">Quantity</th><th class="num" style="width:18%">Rate</th><th class="num" style="width:16%">Total</th></tr></thead><tbody>${rows || '<tr><td colspan="4">No priced items yet.</td></tr>'}</tbody></table>${totalsTable(t)}`;
 }
 function totalsTable(t) {
   return `<table class="totals"><tbody>${t.discount ? `<tr><td>Subtotal</td><td class="num">${pMoney(t.sub)}</td></tr><tr><td>Discount</td><td class="num">−${pMoney(t.discount)}</td></tr>` : ""}
@@ -146,10 +177,9 @@ function printQuote(id) {
   const t = jobTotals(j),
     info = db.company || {};
   const body = `<div class="grid"><div><h3>Prepared for</h3>${billTo(j)}</div><div><h3>Event</h3>${esc(j.title)}<br>${esc(j.venue || "")}<br>${esc(fmtRange(j))}</div></div>
-    <h2>Quotation</h2><table><thead><tr><th>Service</th><th class="num">Price</th></tr></thead><tbody>${t.totals.map((x) => `<tr><td>${esc(x.name)}</td><td class="num">${pMoney(x.total)}</td></tr>`).join("") || '<tr><td colspan="2">No priced items yet.</td></tr>'}</tbody></table>
-    ${totalsTable(t)}
+    <h2>Quotation</h2>${billingTable(j)}
     <div class="note">${info.vatNumber ? "Prices include VAT at 20% where shown." : "Prices shown are the total payable."} This quotation is valid for 30 days. Equipment is reserved only once the booking is confirmed.${info.paymentTerms ? "\n\nPayment terms: " + esc(info.paymentTerms) : ""}</div>`;
-  return printDocument("Quotation", "Ref " + j.id, body);
+  return printDocument("Quotation", "Ref " + j.id, body, { lead: j.title });
 }
 
 // ---------- Invoice ----------
@@ -170,14 +200,8 @@ function printInvoice(id) {
     t = jobTotals(j);
   const days = Number(info.paymentDays) || 30,
     due = addDays(j.invoiceDate, days);
-  // One row per priced line: quantity, price each, line total.
-  const lines = (j.kit || []).filter((k) => (Number(k.price) || 0) > 0);
-  const rows = lines
-    .map((k) => `<tr><td>${esc(k.item)}</td><td class="num">${Number(k.qty) || 0}</td><td class="num">${pMoney(k.price)}</td><td class="num">${pMoney((Number(k.qty) || 0) * (Number(k.price) || 0))}</td></tr>`)
-    .join("");
   const body = `<div class="grid"><div><h3>Bill to</h3>${billTo(j)}</div><div><h3>Invoice details</h3><b>Invoice no.</b> ${esc(j.invoiceNo)}<br><b>Invoice date</b> ${esc(pDate(j.invoiceDate))}<br><b>Payment due</b> ${esc(pDate(due))} (${days} days)<br><b>Event dates</b> ${esc(fmtRange(j))}${j.venue ? `<br><b>Venue</b> ${esc(j.venue)}` : ""}</div></div>
-    <h2>Services</h2><table><thead><tr><th>Description</th><th class="num" style="width:12%">Qty</th><th class="num" style="width:18%">Price each</th><th class="num" style="width:18%">Total</th></tr></thead><tbody>${rows || '<tr><td colspan="4">No priced items on this job.</td></tr>'}</tbody></table>
-    ${totalsTable(t)}
+    <h2>Services</h2>${billingTable(j)}
     <h2>How to pay</h2><div class="note">${info.bankDetails ? esc(info.bankDetails) : '<span class="warn">Add your bank details under Branding before sending this invoice.</span>'}
 Please use ${esc(j.invoiceNo)} as the payment reference.${info.paymentTerms ? "\n" + esc(info.paymentTerms) : ""}${info.vatNumber ? "" : "\nNot VAT registered: no VAT has been charged."}</div>`;
   return printDocument("Invoice", j.invoiceNo, body, { lead: j.title });

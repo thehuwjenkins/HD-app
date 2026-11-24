@@ -172,6 +172,7 @@ export function loadCheck(job,inventory=[],vehicles=[]){
   const byName=new Map(inventory.map(i=>[i.name,i]));
   let kg=0;const unknown=[];
   for(const line of job.kit||[]){
+    if(line.category==='Labour / Crew')continue; // people, not kit
     const w=num(line.weightKg??byName.get(line.item)?.weightKg);
     if(w===null){unknown.push(line.item);continue;}
     kg+=w*(Number(line.qty)||0);
@@ -190,6 +191,7 @@ export function loadItems(kit=[],inventory=[]){
   const byName=new Map(inventory.map(i=>[i.name,i]));
   const boxes=[],noSize=[],inside=[];
   for(const line of kit){
+    if(line.category==='Labour / Crew')continue;
     const i=byName.get(line.item)||{},qty=Number(line.qty)||0;
     if(i.inCase){inside.push({name:line.item,qty});continue;}
     const l=num(i.lengthCm),w=num(i.widthCm),h=num(i.heightCm);

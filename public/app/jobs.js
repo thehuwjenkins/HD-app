@@ -3,14 +3,19 @@ function kitRows() {
     draftKit
       .map(
         (k, n) =>
-          `<div class="kit-price-row"><div><b>${esc(k.item)}</b><div class="muted">${esc(k.category || "Audio")}</div></div><label><span class="muted">Qty</span><input class="field" type="number" min="1" value="${k.qty}" onchange="setKitField(${n},'qty',this.value)"></label><label class="money-only"><span class="muted">Unit price (£)</span><input class="field" type="number" min="0" step="0.01" value="${Number(k.price) || 0}" onchange="setKitField(${n},'price',this.value)"></label><div>${money(k.qty * k.price)}</div><button class="btn secondary" type="button" onclick="removeKit(${n})">×</button></div>`,
+          `<div class="kit-line ${isCrewLine(k) ? "crew" : ""}"><div class="kit-line-head"><div><b>${esc(k.item)}</b><span class="muted">${isCrewLine(k) ? "Crew" : esc(k.category || "Audio")}</span></div><b class="kit-line-total money-only">${money(lineTotal(k))}</b><button class="kit-x" type="button" onclick="removeKit(${n})" aria-label="Remove ${esc(k.item)}">×</button></div>
+          <div class="kit-line-fields">${
+            isCrewLine(k)
+              ? `<label><span class="muted">Crew</span><input class="field" type="number" min="1" value="${k.qty}" onchange="setKitField(${n},'qty',this.value)"></label><label><span class="muted">How long</span><span class="time-unit"><input class="field" type="number" min="0.5" step="0.5" value="${Number(k.time) || 1}" onchange="setKitField(${n},'time',this.value)"><select class="field" onchange="setKitField(${n},'unit',this.value)"><option value="day" ${k.unit !== "hour" ? "selected" : ""}>days</option><option value="hour" ${k.unit === "hour" ? "selected" : ""}>hours</option></select></span></label><label class="money-only"><span class="muted">Rate per ${k.unit === "hour" ? "hour" : "day"} (£)</span><input class="field" type="number" min="0" step="0.01" value="${Number(k.price) || 0}" onchange="setKitField(${n},'price',this.value)"></label>`
+              : `<label><span class="muted">Qty</span><input class="field" type="number" min="1" value="${k.qty}" onchange="setKitField(${n},'qty',this.value)"></label><label class="money-only"><span class="muted">Unit price (£)</span><input class="field" type="number" min="0" step="0.01" value="${Number(k.price) || 0}" onchange="setKitField(${n},'price',this.value)"></label>`
+          }</div></div>`,
       )
       .join("") || '<p class="hint">Search and add equipment below, or add a custom labour/install line.</p>'
   );
 }
 function jobEditor() {
   let j = db.jobs.find((x) => x.id === editingJob) || {};
-  return `<div class="panel" id="jobEditor"><h2>${editingJob ? "Edit job" : "New job"}</h2><form id="jobForm" class="form" onsubmit="saveJob(event)"><label><div class="muted">Job name</div><input class="field" name="title" required value="${esc(j.title || "")}"></label><label><div class="muted">Linked client</div><select class="field" name="clientId">${clientOptions(j.clientId)}</select><button type="button" class="btn secondary" style="margin-top:8px" onclick="quickClient()">+ New client</button></label><label><div class="muted">Venue / address</div><input class="field" name="venue" value="${esc(j.venue || "")}"></label><label><div class="muted">Staff / crew member</div><select class="field" name="staffId"><option value="">Select staff</option>${db.staff.map((m) => `<option value="${m.id}" ${String(m.id) === String(j.staffId) ? "selected" : ""}>${esc(m.name)}</option>`).join("")}</select></label><label><div class="muted">Stage</div><select class="field" name="stage">${STAGES.map((v) => `<option value="${v}" ${v === stageOf(j) ? "selected" : ""}>${STAGE_LABELS[v]}</option>`).join("")}</select><div class="hint">Booked and Out on hire reserve the kit.</div></label><label><div class="muted">Prep / allocation start</div><input class="field" type="datetime-local" name="start" value="${esc(inputTime(j.start, false))}"></label><label><div class="muted">Return date</div><input class="field" type="datetime-local" name="end" value="${esc(inputTime(j.end, true))}"></label><label class="wide"><div class="muted">Load-in / show schedule</div><input class="field" name="load" value="${esc(j.load || "")}"></label><label class="wide"><div class="muted">Crew / technical notes</div><textarea class="field" name="notes" rows="3">${esc(j.notes || "")}</textarea></label><div class="wide"><h2>Internal equipment & pricing</h2><div id="kitRows">${kitRows()}</div><div class="toolbar" style="margin-top:12px"><input class="field" style="flex:1" id="kitSearch" placeholder="Search equipment e.g. Nexo, XLR, SQ5" oninput="searchKit(this.value)"><select class="field" style="max-width:165px" id="kitCategory">${cats.map((c) => `<option>${c}</option>`).join("")}</select></div><div id="kitResults">${kitResults("")}</div><div class="toolbar"><button class="btn secondary" type="button" onclick="addCustomLine()">+ Add custom cost / labour line</button><select class="field" id="packagePick"><option value="">Choose saved package</option>${db.packages.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("")}</select><button class="btn secondary" type="button" onclick="addSelectedPackage()">+ Add package</button></div><label class="money-only" style="display:block;margin:12px 0"><span class="muted">Job discount (£)</span><input class="field" style="max-width:170px" type="number" name="discount" min="0" step="0.01" value="${Number(j.discount) || 0}"></label><div id="quoteTotals">${quoteTotals(draftKit)}</div>${vehiclePicker(j)}<div id="loadResult">${loadResult(j.vehicleIds || [])}</div>${vehicleList().length ? `<button type="button" class="btn secondary" style="margin-top:10px" onclick="openLoadPlanner()">Plan the van load</button>` : ""}<p class="hint">Unit prices and individual kit lines stay internal. The client quote shows category totals only.</p></div><div class="wide toolbar"><button class="btn" type="submit">${editingJob ? "Save changes" : "Save job"}</button>${editingJob ? '<button class="btn ghost" type="button" onclick="cancelEdit()">Cancel</button>' : ""}</div></form></div>`;
+  return `<div class="panel" id="jobEditor"><h2>${editingJob ? "Edit job" : "New job"}</h2><form id="jobForm" class="form" onsubmit="saveJob(event)"><label><div class="muted">Job name</div><input class="field" name="title" required value="${esc(j.title || "")}"></label><label><div class="muted">Linked client</div><select class="field" name="clientId">${clientOptions(j.clientId)}</select><button type="button" class="btn secondary" style="margin-top:8px" onclick="quickClient()">+ New client</button></label><label><div class="muted">Venue / address</div><input class="field" name="venue" value="${esc(j.venue || "")}"></label><label><div class="muted">Staff / crew member</div><select class="field" name="staffId"><option value="">Select staff</option>${db.staff.map((m) => `<option value="${m.id}" ${String(m.id) === String(j.staffId) ? "selected" : ""}>${esc(m.name)}</option>`).join("")}</select></label><label><div class="muted">Stage</div><select class="field" name="stage">${STAGES.map((v) => `<option value="${v}" ${v === stageOf(j) ? "selected" : ""}>${STAGE_LABELS[v]}</option>`).join("")}</select><div class="hint">Booked and Out on hire reserve the kit.</div></label><label><div class="muted">Prep / allocation start</div><input class="field" type="datetime-local" name="start" value="${esc(inputTime(j.start, false))}"></label><label><div class="muted">Return date</div><input class="field" type="datetime-local" name="end" value="${esc(inputTime(j.end, true))}"></label><label class="wide"><div class="muted">Load-in / show schedule</div><input class="field" name="load" value="${esc(j.load || "")}"></label><label class="wide"><div class="muted">Crew / technical notes</div><textarea class="field" name="notes" rows="3">${esc(j.notes || "")}</textarea></label><div class="wide"><h2>Internal equipment & pricing</h2><div id="kitRows">${kitRows()}</div><div class="toolbar" style="margin-top:12px"><input class="field" style="flex:1" id="kitSearch" placeholder="Search equipment e.g. Nexo, XLR, SQ5" oninput="searchKit(this.value)"><select class="field" style="max-width:165px" id="kitCategory">${cats.map((c) => `<option>${c}</option>`).join("")}</select></div><div id="kitResults">${kitResults("")}</div><div class="toolbar"><button class="btn secondary" type="button" onclick="addCrewLine()">+ Add crew</button><button class="btn secondary" type="button" onclick="addCustomLine()">+ Add custom line</button><select class="field" id="packagePick"><option value="">Choose saved package</option>${db.packages.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("")}</select><button class="btn secondary" type="button" onclick="addSelectedPackage()">+ Add package</button></div><label class="money-only" style="display:block;margin:12px 0"><span class="muted">Job discount (£)</span><input class="field" style="max-width:170px" type="number" name="discount" min="0" step="0.01" value="${Number(j.discount) || 0}"></label><div id="quoteTotals">${quoteTotals(draftKit)}</div>${vehiclePicker(j)}<div id="loadResult">${loadResult(j.vehicleIds || [])}</div>${vehicleList().length ? `<button type="button" class="btn secondary" style="margin-top:10px" onclick="openLoadPlanner()">Plan the van load</button>` : ""}<p class="hint">Unit prices stay internal: the quote and invoice show a total for each equipment section, and crew itemised (people × days or hours × rate).</p></div><div class="wide toolbar"><button class="btn" type="submit">${editingJob ? "Save changes" : "Save job"}</button>${editingJob ? '<button class="btn ghost" type="button" onclick="cancelEdit()">Cancel</button>' : ""}</div></form></div>`;
 }
 function kitResults(q) {
   let found = db.inventory.filter((i) => i.name.toLowerCase().includes(q.toLowerCase())).slice(0, 60);
@@ -35,8 +40,16 @@ function addCustomLine() {
   draftKit.push({ item, qty: 1, price, category: guessCategory(item), external: true });
   refreshKit();
 }
+function addCrewLine() {
+  const role = prompt("Crew role (e.g. Sound engineer, Stage hand, Lighting operator)", "Sound engineer");
+  if (!role) return;
+  draftKit.push({ item: role.trim(), qty: 1, time: 1, unit: "day", price: 0, category: CREW_CAT, external: true });
+  refreshKit();
+}
 function setKitField(n, field, value) {
-  draftKit[n][field] = field === "qty" ? Math.max(1, Number(value) || 1) : Math.max(0, Number(value) || 0);
+  if (field === "unit") draftKit[n].unit = value === "hour" ? "hour" : "day";
+  else if (field === "time") draftKit[n].time = Math.max(0.5, Number(value) || 1);
+  else draftKit[n][field] = field === "qty" ? Math.max(1, Number(value) || 1) : Math.max(0, Number(value) || 0);
   refreshKit();
 }
 function quoteTotals(lines) {
@@ -44,7 +57,7 @@ function quoteTotals(lines) {
     c,
     total: lines
       .filter((k) => (k.category || "Audio") === c)
-      .reduce((s, k) => s + (Number(k.qty) || 0) * (Number(k.price) || 0), 0),
+      .reduce((s, k) => s + lineTotal(k), 0),
   }));
   return `<div class="quote-total"><b>Quote totals (ex VAT)</b>${totals
     .filter((x) => x.total > 0)
@@ -224,7 +237,7 @@ function duplicateJob(id) {
 function jobValue(j) {
   return Math.max(
     0,
-    (j.kit || []).reduce((sum, k) => sum + (Number(k.qty) || 0) * (Number(k.price) || 0), 0) -
+    (j.kit || []).reduce((sum, k) => sum + lineTotal(k), 0) -
       (Number(j.discount) || 0),
   );
 }
