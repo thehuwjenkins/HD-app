@@ -7,6 +7,7 @@ import {generateImage} from './ai.js';
 import {crewPage,upgradePage} from './pages.js';
 import {whoIs,describe,visibleState,prepareChanges,checkAccessSetting} from './roles.js';
 import {syncAccess,accessStatus} from './accesssync.js';
+import {handleCrew} from './crew.js';
 import {STATIC} from './static.gen.js';
 // App code, styles and logo bundled into the worker (see tools/bundle-static.mjs).
 function bundled(path){
@@ -43,6 +44,11 @@ async function guarded(fn){
 async function api(req,env,url,email,owner){
   const path=url.pathname,method=req.method;
   const migrated=await isMigrated(env);
+  // Crew reports from the "My jobs" page (damage, debrief, photos): checked against the jobs each person is assigned to.
+  if(path.startsWith('/api/crew/')){
+    if(!migrated)return reply('Not ready',409);
+    return guarded(()=>handleCrew(req,env,url,email));
+  }
   // Team members may use the data API within their areas; everything else here is the owner's.
   let who={kind:owner?'owner':'none'};
   if(!owner&&migrated)who=whoIs(env,email,(await loadState(env)).state);
@@ -140,7 +146,7 @@ async fetch(req,env){
   if(path.startsWith('/api/'))return api(req,env,url,email,owner);
   if(req.method!=='GET')return reply('Not found',404);
   // App code, styles and the logo: any signed-in person may load them (they hold no business data).
-  if(path.startsWith('/app/')||path==='/logo.png')return env.ASSETS?env.ASSETS.fetch(req):bundled(path);
+  if(path.startsWith('/app/')||path==='/logo.png'||path==='/logo-print.png')return env.ASSETS?env.ASSETS.fetch(req):bundled(path);
   if(path.startsWith('/files/'))return serveFile(env,path);
   if(path!=='/')return reply('Not found',404);
 
@@ -159,7 +165,7 @@ async fetch(req,env){
   const state=await currentState(env);
   if(!state)return reply('Workspace setup is incomplete',503);
   if(!state.staff.some(s=>String(s.email||'').trim().toLowerCase()===email))return reply('This email has not been invited to HD Events HQ. Ask Huw to add you.',403);
-  return html(crewPage(state,email));
+  return html(crewPage(state,email,undefined,url.searchParams.get('msg')||''));
 },
 // Daily backup, set by the cron trigger in wrangler.toml.
 async scheduled(event,env,ctx){

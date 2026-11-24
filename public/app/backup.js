@@ -63,7 +63,7 @@ async function hqApi(path, body) {
 }
 const hqWhen = (t) => (t ? new Date(t).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "—");
 const hqSize = (b) => (b > 1e6 ? (b / 1e6).toFixed(1) + " MB" : Math.round((b || 0) / 1e3) + " KB");
-const hqNames = { jobs: "jobs", inventory: "equipment", staff: "staff", clients: "contacts", tasks: "tasks", projects: "projects", packages: "packages", crewInvites: "crew invitations", crossHires: "cross-hires", quotes: "quotes", settings: "settings" };
+const hqNames = { jobs: "jobs", inventory: "equipment", staff: "staff", clients: "contacts", tasks: "tasks", projects: "projects", packages: "packages", crewInvites: "crew invitations", crossHires: "cross-hires", quotes: "quotes", plans: "event plans", jobReports: "crew reports", settings: "settings" };
 
 async function hqBackupStatus() {
   const el = $("hqBackupStatus");

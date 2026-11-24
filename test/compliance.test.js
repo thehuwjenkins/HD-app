@@ -140,21 +140,23 @@ test('inventory import from a pasted spreadsheet or CSV (e.g. made with ChatGPT)
 
 import {allocated, shortages, validate as validateState} from '../public/app/stock.js';
 import {sampleState as sample} from './fakes.js';
-test('accessories are set aside from stock, travel with their item and are checked', () => {
+test('accessories: checked, and counted per job like any other line', () => {
   const s = sample();
   s.inventory.push({id: 3, name: 'SQ5', qty: 2, service: 0, weightKg: 18, accessories: [{item: 'IEC cable', qty: 1}]}, {id: 4, name: 'IEC cable', qty: 20, service: 0, weightKg: 0.3});
   validateState(s);
-  assert.equal(allocated(s.inventory, 'IEC cable'), 2, 'two desks keep one IEC each');
-  // A job wanting all 20 IECs is short by 2, because 2 are with the desks.
+  assert.equal(allocated(s.inventory, 'IEC cable'), 2, 'full sets for both desks would use two');
+  // A desk job takes its IEC as its own line, so a cable hire the same day can have 19, not 20.
+  s.jobs.push({id: 98, title: 'Desk hire', booking: 'Reserved', start: '2026-08-01T08:00', end: '2026-08-01T20:00', kit: [{item: 'SQ5', qty: 1}, {item: 'IEC cable', qty: 1, accessoryOf: 'SQ5'}]});
   const job = {id: 99, title: 'Cable hire', booking: 'Reserved', start: '2026-08-01T09:00', end: '2026-08-01T18:00', kit: [{item: 'IEC cable', qty: 20}]};
-  assert.deepEqual(shortages(job, s).map((x) => [x.name, x.short]), [['IEC cable', 2]]);
-  assert.equal(shortages({...job, kit: [{item: 'IEC cable', qty: 18}]}, s).length, 0);
-  // The desk's IEC counts towards the van weight.
-  assert.equal(loadCheck({kit: [{item: 'SQ5', qty: 1}]}, s.inventory, []).kg, 18.3);
-  // Checks
+  assert.deepEqual(shortages(job, s).map((x) => [x.name, x.short]), [['IEC cable', 1]]);
+  assert.equal(shortages({...job, kit: [{item: 'IEC cable', qty: 19}]}, s).length, 0);
+  // On another day all 20 are free.
+  assert.equal(shortages({...job, start: '2026-08-03T09:00', end: '2026-08-03T18:00'}, s).length, 0);
+  // Weight counts each line once.
+  assert.equal(loadCheck(s.jobs.at(-1), s.inventory, []).kg, 18.3);
   const bad = (acc, msg) => { const t = structuredClone(s); t.inventory[2].accessories = acc; assert.throws(() => validateState(t), msg); };
   bad([{item: 'Nope', qty: 1}], /not in the inventory/);
   bad([{item: 'SQ5', qty: 1}], /its own accessory/);
   bad([{item: 'IEC cable', qty: 1}, {item: 'IEC cable', qty: 1}], /twice/);
-  bad([{item: 'IEC cable', qty: 11}], /22 set aside as accessories but only 20/);
+  bad([{item: 'IEC cable', qty: 0}], /1 to 100/);
 });

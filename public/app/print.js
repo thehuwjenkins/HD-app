@@ -9,7 +9,7 @@ const PRINT_CSS = `
 .sheet{background:#fff;max-width:210mm;margin:16px auto;padding:14mm 13mm;box-shadow:0 4px 24px #0002}
 .ph{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;padding-bottom:12px;margin-bottom:14px;border-bottom:3px solid #111827;position:relative}
 .ph:after{content:"";position:absolute;left:0;right:0;bottom:-6px;height:3px;background:linear-gradient(90deg,#00eeed,#9145ff)}
-.logo{display:inline-block;background:#0f1630;border-radius:8px;padding:8px 12px}.logo img{display:block;max-height:46px;max-width:180px}
+.logo{display:block;height:88px;width:auto;max-width:240px;object-fit:contain;object-position:left;margin:-8px 0 -6px -6px}
 .co{font-size:11px;color:#374151;margin-top:6px;line-height:1.5}.brand{font:800 20px Arial,sans-serif;letter-spacing:.06em}
 .ph-right{text-align:right}.ph-right h1{margin:0 0 4px;font-size:22px;letter-spacing:.04em}.ph-right div{font-size:11px;color:#374151}
 h2{font-size:14px;margin:18px 0 6px;padding-bottom:3px;border-bottom:1px solid #9ca3af}h3{font-size:12.5px;margin:12px 0 4px}
@@ -25,19 +25,21 @@ td.num,th.num{text-align:right}td.box{width:44px;text-align:center}.box i{displa
 svg{max-width:100%;height:auto;display:block;margin:6px 0}.swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px}
 .stage-h{break-after:avoid}tr.acc td{font-size:11px;background:#fbfbfd}tr.acc td:nth-child(4){padding-left:18px}.lead-title{font:700 24px/1.2 Arial,sans-serif;margin:16px 0 14px}
 @media print{body{background:#fff}.actions{display:none!important}.sheet{box-shadow:none;margin:0;max-width:none;padding:0}
-@page{size:A4;margin:12mm}.logo,.ph:after,th,.cat td,.swatch,svg{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
+@page{size:A4;margin:12mm}.ph:after,th,.cat td,.swatch,svg{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
 
+// The HD Events logo for white paper (black wording, coloured wave, transparent background).
+const DOC_LOGO = "/logo-print.png";
 const pDate = (d) => (d ? fmtDay(String(d).slice(0, 10), { day: "numeric", month: "short", year: "numeric" }) : "");
 const pMoney = (n) => "£" + (Number(n) || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // Open a document in a new tab. Returns the HTML (handy for checks).
 function printDocument(title, ref, body, { foot = "", lead = "" } = {}) {
   const info = db.company || {};
-  const logo = db.branding?.logo;
+  const logo = db.branding?.docLogo || DOC_LOGO;
   const contact = [info.address, [info.phone, info.email].filter(Boolean).join(" · "), info.website].filter(Boolean).map(esc).join("<br>");
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}${ref ? " " + esc(ref) : ""} · ${esc(info.name || "HD Events")}</title><style>${PRINT_CSS}</style></head><body>
   <div class="actions"><button onclick="print()">Print / Save as PDF</button><button class="plain" onclick="close()">Close</button></div>
-  <div class="sheet"><div class="ph"><div>${logo ? `<span class="logo"><img src="${esc(new URL(logo, location.href).href)}" alt="${esc(info.name || "HD Events")}"></span>` : `<span class="brand">${esc(info.name || "HD EVENTS")}</span>`}<div class="co">${contact}</div></div>
+  <div class="sheet"><div class="ph"><div><img class="logo" src="${esc(new URL(logo, location.href).href)}" alt="${esc(info.name || "HD Events")}"><div class="co">${contact}</div></div>
   <div class="ph-right"><h1>${esc(title.toUpperCase())}</h1>${ref ? `<div>${esc(ref)}</div>` : ""}<div>Printed ${esc(pDate(todayKey()))}</div></div></div>
   ${lead ? `<div class="lead-title">${esc(lead)}</div>` : ""}${body}<div class="foot">${foot || esc(info.name || "HD Events")}${info.companyNumber ? " · Company no. " + esc(info.companyNumber) : ""}${info.vatNumber ? " · VAT no. " + esc(info.vatNumber) : ""}</div></div></body></html>`;
   const w = window.open("", "_blank");
@@ -90,14 +92,16 @@ function printJob(id) {
   // Stock items and hired-in kit get picked; services like delivery are listed separately.
   const service = (k) => !inv.has(k.item) && ["Transport", "Install"].includes(k.category);
   const byCat = {};
-  kit.filter((k) => !service(k)).forEach((k) => (byCat[inv.get(k.item)?.category || k.category || "Audio"] ||= []).push(k));
+  // Accessories are listed under their main item rather than in their own section.
+  const hasMain = (k) => k.accessoryOf && kit.some((m) => m.item === k.accessoryOf && !m.accessoryOf);
+  kit.filter((k) => !service(k) && !hasMain(k)).forEach((k) => (byCat[inv.get(k.item)?.category || k.category || "Audio"] ||= []).push(k));
   const order = (c) => (cats.indexOf(c) + 1 || (c === "Cases" ? 50 : 99));
   const load = loadCheck(j, db.inventory, vehicleList());
   let units = 0;
   const rows = Object.entries(byCat)
     .sort(([a], [b]) => order(a) - order(b) || a.localeCompare(b))
     .map(([cat, lines]) => {
-      const count = lines.reduce((n, k) => n + (Number(k.qty) || 0), 0);
+      const count = lines.reduce((n, k) => n + (Number(k.qty) || 0) + kit.filter((x) => x.accessoryOf === k.item && !k.accessoryOf).reduce((m, x) => m + (Number(x.qty) || 0), 0), 0);
       units += count;
       return (
         `<tr class="cat"><td colspan="6">${esc(cat)} <span class="muted">· ${lines.length} line${lines.length > 1 ? "s" : ""}, ${count} item${count > 1 ? "s" : ""}</span></td></tr>` +
@@ -108,18 +112,21 @@ function printJob(id) {
               issue = short.find((x) => x.name === k.item);
             const details = [
               !inv.has(k.item) ? "<b>Hired in / not in stock</b>" : "",
+              k.package ? "Part of " + esc(k.package) + " package" : "",
               i.inCase ? "Packed inside another case" : i.lengthCm ? `Case ${i.lengthCm}×${i.widthCm}×${i.heightCm} cm` : "",
               i.stackable === false ? "Don't stack on" : "",
               i.notes ? esc(i.notes) : "",
               issue ? `<span class="warn">SHORT ${issue.short}: cross-hire needed</span>` : "",
             ].filter(Boolean).join(" · ");
-            const acc = (i.accessories || [])
-              .map((x) => {
-                const ai = inv.get(x.item) || {},
-                  n = x.qty * k.qty;
-                return `<tr class="acc"><td class="box"><i></i></td><td class="box"><i></i></td><td class="num">${n}</td><td>↳ ${esc(x.item)}</td><td class="muted">Accessory: stays with ${esc(k.item)}</td><td class="num">${hasNum(ai.weightKg) ? kg(ai.weightKg * n) : ""}</td></tr>`;
-              })
-              .join("");
+            const acc = k.accessoryOf
+              ? ""
+              : kit
+                  .filter((x) => x.accessoryOf === k.item)
+                  .map((x) => {
+                    const ai = inv.get(x.item) || {};
+                    return `<tr class="acc"><td class="box"><i></i></td><td class="box"><i></i></td><td class="num">${x.qty}</td><td>↳ ${esc(x.item)}</td><td class="muted">Accessory of ${esc(k.item)}</td><td class="num">${hasNum(ai.weightKg) ? kg(ai.weightKg * x.qty) : ""}</td></tr>`;
+                  })
+                  .join("");
             return `<tr><td class="box"><i></i></td><td class="box"><i></i></td><td class="num"><b>${k.qty}</b></td><td><b>${esc(k.item)}</b></td><td>${details}</td><td class="num">${hasNum(i.weightKg) ? kg(i.weightKg * k.qty) : ""}</td></tr>${acc}`;
           })
           .join("")
@@ -228,7 +235,7 @@ function printInventory() {
         list
           .map(
             (i) =>
-              `<tr><td>${esc(i.name)}${i.inCase ? ' <span class="muted">(in a case)</span>' : ""}${i.accessories?.length ? `<br><span class="muted">With: ${i.accessories.map((x) => x.qty + " × " + esc(x.item)).join(", ")}</span>` : ""}${allocated(db.inventory, i.name) ? `<br><span class="muted">${allocated(db.inventory, i.name)} kept as accessories</span>` : ""}</td><td class="num">${i.qty}${i.service ? ` <span class="warn">(${i.service} out of service)</span>` : ""}</td><td>${i.lengthCm ? `${i.lengthCm}×${i.widthCm}×${i.heightCm} cm` : ""}</td><td class="num">${weightText(i)}</td><td class="num">${hasNum(i.weightKg) ? kg(i.weightKg * i.qty) : ""}</td>${me.money ? `<td class="num">${valueText(i)}</td><td class="num">${hasNum(i.value) ? pMoney(i.value * i.qty) : ""}</td>` : ""}</tr>`,
+              `<tr><td>${esc(i.name)}${i.inCase ? ' <span class="muted">(in a case)</span>' : ""}${i.accessories?.length ? `<br><span class="muted">Accessories: ${i.accessories.map((x) => x.qty + " × " + esc(x.item)).join(", ")}</span>` : ""}</td><td class="num">${i.qty}${i.service ? ` <span class="warn">(${i.service} out of service)</span>` : ""}</td><td>${i.lengthCm ? `${i.lengthCm}×${i.widthCm}×${i.heightCm} cm` : ""}</td><td class="num">${weightText(i)}</td><td class="num">${hasNum(i.weightKg) ? kg(i.weightKg * i.qty) : ""}</td>${me.money ? `<td class="num">${valueText(i)}</td><td class="num">${hasNum(i.value) ? pMoney(i.value * i.qty) : ""}</td>` : ""}</tr>`,
           )
           .join(""),
     )

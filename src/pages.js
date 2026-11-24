@@ -6,29 +6,45 @@ const shell=(title,body)=>'<!doctype html><html lang="en"><head><meta charset="u
 // Crew see only the jobs assigned to them, and only these fields (no prices, notes or client details).
 export function crewJobs(state,email){
   const ids=new Set(state.staff.filter(s=>String(s.email||'').trim().toLowerCase()===email).map(s=>String(s.id)));
-  return state.jobs.filter(j=>ids.has(String(j.staffId))).map(j=>({title:j.title,venue:j.venue,start:j.start,end:j.end,load:j.load,stage:stageOf(j)}));
+  return state.jobs.filter(j=>ids.has(String(j.staffId))).map(j=>({id:j.id,title:j.title,venue:j.venue,start:j.start,end:j.end,load:j.load,stage:stageOf(j),
+    items:[...new Set((j.kit||[]).filter(k=>k.category!=='Labour / Crew').map(k=>k.item))]}));
 }
 const ukToday=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date()); // YYYY-MM-DD
 const day=s=>/^\d{4}-\d\d-\d\d/.exec(s||'')?.[0]||'';
 const fmt=(s,o)=>new Date(day(s)+'T00:00:00Z').toLocaleDateString('en-GB',{timeZone:'UTC',...o});
 const time=s=>/T(\d\d:\d\d)$/.exec(s||'')?.[1]||'';
 const STATUS={enquiry:['Provisional','prov'],quote:['Provisional','prov'],booked:['Confirmed','conf'],out:['Confirmed','conf'],returned:['Finished','done'],invoiced:['Finished','done']};
-function crewCard(j){
+// Report damage, write a debrief and upload receipts / venue photos for a job.
+function crewTools(j,reports){
+  const opt=j.items.map(n=>'<option>'+escapeText(n)+'</option>').join('')+'<option>Other</option>';
+  const mine=reports.filter(r=>r.jobId===j.id);
+  const list=mine.length?'<ul class="mine">'+mine.map(r=>'<li><b>'+({damage:'Damage: '+escapeText(r.item),debrief:'Debrief',photo:escapeText(r.label)}[r.kind]||'')+'</b> · '+escapeText(new Date(r.at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}))+(r.kind==='photo'?' · <a href="'+escapeText(r.url)+'" target="_blank" rel="noopener">view</a>':'')+(r.text?'<br>'+escapeText(r.text.slice(0,160))+(r.text.length>160?'…':''):'')+'</li>').join('')+'</ul>':'';
+  const f=(action,inner,multi)=>'<form method="post" action="/api/crew/'+action+'"'+(multi?' enctype="multipart/form-data"':'')+'><input type="hidden" name="jobId" value="'+j.id+'">'+inner+'</form>';
+  return '<details class="tools"><summary>Report damage, debrief and photos'+(mine.length?' ('+mine.length+' sent)':'')+'</summary>'
+    +'<h3>Report damage</h3>'+f('damage','<label>Which item?<select name="item" required><option value="">Choose…</option>'+opt+'</select></label><label>What happened?<textarea name="text" rows="3" required placeholder="e.g. SM58 grille dented after it was dropped on stage. Still works but rattles."></textarea></label><button>Save damage report</button>')
+    +'<h3>Job debrief</h3>'+f('debrief','<label>Client feedback, problems on the day, and what to plan next time<textarea name="text" rows="4" required placeholder="e.g. Client was happy with the sound, but we needed two extra lights for the stage. One radio mic dropped out during the speeches (reported as damage)."></textarea></label><button>Save debrief</button>')
+    +'<h3>Receipts and venue photos</h3>'+f('photo','<fieldset><legend>This is a…</legend><label class="inline"><input type="radio" name="label" value="Receipt" required> Receipt</label><label class="inline"><input type="radio" name="label" value="Venue photo"> Venue photo</label></fieldset><label>Photo<input type="file" name="photo" accept="image/*" multiple required></label><label>Note (optional)<input name="note" maxlength="300" placeholder="e.g. Fuel for the van, or best shot of the stage"></label><button>Upload</button>',true)
+    +(list?'<h3>What you have sent</h3>'+list:'')+'</details>';
+}
+function crewCard(j,reports=[]){
   const [label,cls]=STATUS[j.stage];
   const when=day(j.start)?fmt(j.start,{weekday:'long',day:'numeric',month:'long'})+(time(j.start)?' from '+time(j.start):''):'Date to be confirmed';
   const until=day(j.end)&&day(j.end)!==day(j.start)?'Until '+fmt(j.end,{weekday:'short',day:'numeric',month:'short'})+(time(j.end)?' '+time(j.end):''):(time(j.end)?'Until '+time(j.end):'');
   const box=day(j.start)?'<div class="date"><b>'+Number(day(j.start).slice(8))+'</b><span>'+fmt(j.start,{month:'short'})+'</span></div>':'<div class="date"><b>?</b></div>';
   const maps=j.venue?' · <a href="https://www.google.com/maps/search/?api=1&amp;query='+encodeURIComponent(j.venue)+'" target="_blank" rel="noopener">Map</a>':'';
-  return '<article>'+box+'<div class="body"><span class="status '+cls+'">'+label+'</span><h2>'+escapeText(j.title)+'</h2><p>'+escapeText(when)+(until?'<br>'+escapeText(until):'')+'</p>'+(j.venue?'<p>'+escapeText(j.venue)+maps+'</p>':'')+(j.load?'<p class="sched">'+escapeText(j.load)+'</p>':'')+'</div></article>';
+  return '<article id="job-'+j.id+'">'+box+'<div class="body"><span class="status '+cls+'">'+label+'</span><h2>'+escapeText(j.title)+'</h2><p>'+escapeText(when)+(until?'<br>'+escapeText(until):'')+'</p>'+(j.venue?'<p>'+escapeText(j.venue)+maps+'</p>':'')+(j.load?'<p class="sched">'+escapeText(j.load)+'</p>':'')+crewTools(j,reports)+'</div></article>';
 }
-export function crewPage(state,email,today=ukToday()){
+export function crewPage(state,email,today=ukToday(),msg=''){
+  const reports=(state.jobReports||[]).filter(r=>r.by===email);
+  const card=j=>crewCard(j,reports);
   const mine=crewJobs(state,email).sort((a,b)=>(a.start||'9999').localeCompare(b.start||'9999'));
   const name=state.staff.find(s=>String(s.email||'').trim().toLowerCase()===email)?.name;
   const upcoming=mine.filter(j=>!day(j.start)||(day(j.end)||day(j.start))>=today);
   const past=mine.filter(j=>!upcoming.includes(j)).reverse().slice(0,10);
   return crewShell('<h1>'+(name?'Hi '+escapeText(name.split(' ')[0]):'Your jobs')+'</h1><p class="lead">Your upcoming jobs with HD Events.</p>'
-    +(upcoming.map(crewCard).join('')||'<p class="none">No upcoming jobs assigned to you.</p>')
-    +(past.length?'<details><summary>Recent jobs ('+past.length+')</summary>'+past.map(crewCard).join('')+'</details>':'')
+    +(msg?'<p class="msg" role="status">'+escapeText(msg.slice(0,200))+'</p>':'')
+    +(upcoming.map(card).join('')||'<p class="none">No upcoming jobs assigned to you.</p>')
+    +(past.length?'<details><summary>Recent jobs ('+past.length+')</summary>'+past.map(card).join('')+'</details>':'')
     +'<p class="foot">Questions about a job? Contact Huw. · <a href="/cdn-cgi/access/logout">Sign out</a></p>');
 }
 const crewShell=body=>'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HD Events · My jobs</title><style>'
@@ -37,10 +53,17 @@ const crewShell=body=>'<!doctype html><html lang="en"><head><meta charset="utf-8
   +'article{display:flex;gap:14px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:10px 0}.date{flex:0 0 52px;text-align:center;background:#e3f6f7;border:1px solid #9fd8dc;border-radius:10px;padding:8px 0;align-self:flex-start;line-height:1.1}.date b{display:block;font-size:22px}.date span{font-size:11px;color:var(--muted);text-transform:uppercase}'
   +'.body{min-width:0}.body h2{font-size:18px;margin:4px 0}.body p{margin:4px 0;color:#2f3a4b}.sched{background:#f6f8fb;border:1px solid var(--line);border-radius:8px;padding:8px 10px;white-space:pre-wrap}'
   +'.status{font-size:12px;font-weight:700;border-radius:20px;padding:2px 9px}.conf{background:#e1f4ea;color:#0f6138}.prov{background:#efe8ff;color:#5521b5}.done{background:#e9eef5;color:var(--muted)}'
-  +'details{margin-top:18px}summary{cursor:pointer;color:var(--muted);padding:8px 0}.none{background:var(--card);border-radius:14px;padding:20px;text-align:center;color:var(--muted)}.foot{color:var(--muted);font-size:14px;margin-top:24px}'
+  +'details{margin-top:18px}summary{cursor:pointer;color:var(--muted);padding:8px 0}'
+  +'.tools{margin-top:10px;border-top:1px solid var(--line);padding-top:4px}.tools summary{color:var(--accent);font-weight:700}.tools h3{font-size:15px;margin:14px 0 6px}'
+  +'.tools form{display:flex;flex-direction:column;gap:8px}.tools label{display:flex;flex-direction:column;gap:4px;font-size:14px;color:#2f3a4b}.tools label.inline{flex-direction:row;align-items:center;gap:8px;font-size:16px}'
+  +'.tools select,.tools textarea,.tools input:not([type=radio]):not([type=hidden]){font:inherit;padding:12px;border:1px solid #b4bfce;border-radius:12px;background:#fff;color:#111827;width:100%}'
+  +'.tools fieldset{border:0;padding:0;margin:0;display:flex;gap:18px;flex-wrap:wrap}.tools legend{font-size:14px;color:#2f3a4b;margin-bottom:4px}.tools input[type=radio]{width:20px;height:20px;accent-color:#6d35e8}'
+  +'.tools button{font:600 16px inherit;min-height:48px;border:0;border-radius:30px;color:#fff;background:linear-gradient(120deg,#00808c,#2f6fd0,#6d35e8);cursor:pointer}'
+  +'.mine{padding-left:18px;font-size:14px}.mine li{margin:6px 0}.msg{background:#e1f4ea;color:#0f6138;border-radius:12px;padding:12px 14px;font-weight:600}'
+  +'.none{background:var(--card);border-radius:14px;padding:20px;text-align:center;color:var(--muted)}.foot{color:var(--muted);font-size:14px;margin-top:24px}'
   +'</style><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&display=swap"></head><body><header><img alt="HD Events" src="/logo.png"></header>'+body+'</body></html>';
 
-const NAMES={jobs:'Jobs',inventory:'Equipment',staff:'Staff',clients:'Contacts',tasks:'Tasks',projects:'Projects',packages:'Packages',crewInvites:'Crew invitations',crossHires:'Cross-hires',quotes:'Quotes',plans:'Event plans'};
+const NAMES={jobs:'Jobs',inventory:'Equipment',staff:'Staff',clients:'Contacts',tasks:'Tasks',projects:'Projects',packages:'Packages',crewInvites:'Crew invitations',crossHires:'Cross-hires',quotes:'Quotes',plans:'Event plans',jobReports:'Crew reports'};
 export function upgradePage(counts,ready){
   const rows=Object.entries(counts).map(([k,n])=>'<tr><td>'+NAMES[k]+'</td><td id="b-'+k+'">'+n+'</td><td id="a-'+k+'">–</td></tr>').join('');
   return shell('HD Events HQ · Storage upgrade',`<h1>One-off storage upgrade</h1>

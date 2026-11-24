@@ -11,7 +11,7 @@
 export const SECTIONS = {
   overview: {label: 'Overview', pages: ['Overview'], write: [], read: []},
   planner: {label: 'Event Planner', pages: ['Event Planner'], write: ['plans'], read: ['plans', 'staff']},
-  jobs: {label: 'Jobs, pipeline & calendar', pages: ['Pipeline', 'Calendar', 'Jobs', 'Cross-hire'], write: ['jobs', 'crewInvites', 'crossHires', 'clients'], read: ['jobs', 'crewInvites', 'crossHires', 'inventory', 'packages', 'staff', 'clients']},
+  jobs: {label: 'Jobs, pipeline & calendar', pages: ['Pipeline', 'Calendar', 'Jobs', 'Cross-hire'], write: ['jobs', 'crewInvites', 'crossHires', 'clients', 'jobReports'], read: ['jobs', 'crewInvites', 'crossHires', 'inventory', 'packages', 'staff', 'clients', 'jobReports']},
   tasks: {label: 'Tasks & projects', pages: ['My Workday', 'Projects'], write: ['tasks', 'projects'], read: ['tasks', 'projects']},
   kit: {label: 'Kit & packages', pages: ['Inventory', 'Packages', 'Cross-hire'], write: ['inventory', 'packages', 'crossHires'], read: ['inventory', 'packages', 'crossHires', 'jobs']},
   people: {label: 'Staff & contacts', pages: ['Staff', 'Crew Portal', 'CRM'], write: ['staff', 'clients', 'crewInvites'], read: ['staff', 'clients', 'crewInvites', 'jobs']},

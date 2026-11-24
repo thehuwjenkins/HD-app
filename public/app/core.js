@@ -26,8 +26,10 @@ db.quotes = db.quotes || [];
 db.branding = db.branding || { logo: DEFAULT_HD_LOGO };
 db.crewInvites = db.crewInvites || [];
 db.plans = db.plans || [];
+db.jobReports = db.jobReports || [];
 let inventoryView = "grid";
 let inventoryQuery = "";
+let inventoryCat = "";
 let activeClient = null;
 let editingJob = null;
 let draftKit = [];
@@ -110,7 +112,7 @@ function stageTag(job) {
   const st = stageOf(job);
   return `<span class="stage" data-stage="${st}">${STAGE_LABELS[st]}</span>`;
 }
-const cats = ["Audio", "Visual", "Lighting", "Stage & Rigging", "Transport", "Install", "Labour / Crew"];
+const cats = ["Audio", "Visual", "Lighting", "Stage & Rigging", "Power Distribution", "Transport", "Install", "Labour / Crew"];
 const money = (n) => (me.money ? "£" + (Number(n) || 0).toFixed(2) : "—");
 // Crew lines are charged per person per day or hour: people × days/hours × rate. Everything else is qty × price.
 const CREW_CAT = "Labour / Crew";
@@ -125,6 +127,7 @@ function inputTime(value, end) {
 function guessCategory(name) {
   let n = name.toLowerCase();
   if (/truck|van|delivery|transport|mileage|fuel/.test(n)) return "Transport";
+  if (/distro|distribution|16a|32a|63a|125a|ceeform|powercon|iec|extension|cable drum|generator|power/.test(n)) return "Power Distribution";
   if (/rigging|truss|stage|hoist|chain|motor/.test(n)) return "Stage & Rigging";
   if (/light|par |moving head|dimmer|dmx|spotlight/.test(n)) return "Lighting";
   if (/led wall|projector|screen|camera|video|hdmi|vision/.test(n)) return "Visual";

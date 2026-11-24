@@ -10,6 +10,7 @@ const KINDS={
   equipment:{types:IMAGES,max:5*1024*1024},
   creative:{types:IMAGES,max:10*1024*1024},           // moodboard images, AI visuals, posters
   plan:{types:{...IMAGES,...DOCUMENTS},max:25*1024*1024}, // checklist attachments: licences, certificates, risk assessments
+  crew:{types:IMAGES,max:15*1024*1024},             // receipts and venue photos uploaded by crew from their phones
 };
 export const MAX_FILE=25*1024*1024;
 const EXTS=[...new Set(Object.values({...IMAGES,...DOCUMENTS}))].join('|');

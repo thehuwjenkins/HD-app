@@ -1,6 +1,6 @@
 // Saving: after every change the app calls save(). Instead of sending the whole workspace,
 // save() compares each record with the last saved copy and sends only the records that changed.
-const COLLECTIONS = ["jobs", "inventory", "staff", "clients", "tasks", "projects", "packages", "crewInvites", "crossHires", "quotes", "plans"];
+const COLLECTIONS = ["jobs", "inventory", "staff", "clients", "tasks", "projects", "packages", "crewInvites", "crossHires", "quotes", "plans", "jobReports"];
 let writes = Promise.resolve(),
   pending = 0,
   failed = false;

@@ -23,18 +23,70 @@ function pipeline() {
 function moveStage(id, dir) {
   const j = db.jobs.find((x) => x.id === id);
   if (!j) return;
-  const to = STAGES[STAGES.indexOf(stageOf(j)) + dir];
-  if (!to) return;
+  moveTo(id, STAGES[STAGES.indexOf(stageOf(j)) + dir]);
+}
+// When each step happened, recorded on the job.
+const STAGE_STAMP = { quote: "quoteSentAt", booked: "acceptedAt", out: "hiredOutAt", returned: "returnedAt", invoiced: "invoicedAt" };
+function moveTo(id, to) {
+  const j = db.jobs.find((x) => x.id === id);
+  if (!j || !to || to === stageOf(j)) return false;
   const next = { ...j, stage: to, booking: STAGE_BOOKING[to] };
+  if (STAGE_STAMP[to] && STAGES.indexOf(to) > STAGES.indexOf(stageOf(j))) next[STAGE_STAMP[to]] = new Date().toISOString();
   if (next.booking === "Reserved" && j.booking !== "Reserved") {
     const [from, until] = bounds(next);
     if (!(until > from)) return alert("Set the job's allocation start and return date before booking it.");
     if (!next.kit.length) return alert("Add equipment to the job before booking it.");
     const issue = shortages(next, db)[0];
-    if (issue)
-      return alert(`Can't book ${j.title}: ${issue.name} is short by ${issue.short}${issue.conflicts.length ? " (also out on " + issue.conflicts.join(", ") + ")" : ""}. Plan a cross-hire or change the kit first.`);
+    if (issue) {
+      alert(`Can't book ${j.title}: ${issue.name} is short by ${issue.short}${issue.conflicts.length ? " (also out on " + issue.conflicts.join(", ") + ")" : ""}. Plan a cross-hire or change the kit first.`);
+      return false;
+    }
   }
   Object.assign(j, next);
   save();
   render();
+  return true;
+}
+// ---------- Next action on each job ----------
+function nextActions(j) {
+  const st = stageOf(j);
+  const b = (label, fn, cls = "") => `<button class="btn small ${cls}" onclick="${fn}">${label}</button>`;
+  const money = me.money,
+    owner = me.owner;
+  return (
+    {
+      enquiry: (money ? b("Send quote", `sendQuote(${j.id})`) : "") + b("Mark quote as sent", `moveTo(${j.id},'quote')`, money ? "secondary" : ""),
+      quote: b("Mark as accepted", `moveTo(${j.id},'booked')`),
+      booked: b("Mark as hired out", `moveTo(${j.id},'out')`) + (owner ? b("Send invoice", `sendInvoice(${j.id})`, "secondary") : ""),
+      out: b("Mark as returned", `moveTo(${j.id},'returned')`),
+      returned: (owner ? b("Send invoice", `sendInvoice(${j.id})`) : "") + b("Mark as invoiced", `moveTo(${j.id},'invoiced')`, owner ? "secondary" : ""),
+      invoiced: "",
+    }[st] || ""
+  );
+}
+// Email draft to the client with the document open alongside it to save as PDF and attach.
+function clientEmailDraft(j, subject, body) {
+  const c = db.clients.find((x) => String(x.id) === String(j.clientId)) || {};
+  const a = document.createElement("a");
+  a.href = "mailto:" + encodeURIComponent(c.email || "") + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+  a.click();
+  return !!c.email;
+}
+function sendQuote(id) {
+  const j = db.jobs.find((x) => x.id === id);
+  printQuote(id);
+  const hasEmail = clientEmailDraft(j, "Quotation: " + j.title, `Hello,\n\nPlease find attached our quotation for ${j.title}${j.start ? " (" + fmtRange(j) + ")" : ""}.\n\nAny questions, just reply to this email.\n\nKind regards,\n${db.company?.name || "HD Events"}`);
+  setTimeout(() => {
+    if (confirm(`The quote has opened in a new tab: save it as a PDF and attach it to the email${hasEmail ? "" : " (no email address on this client yet)"}.\n\nMark the quote as sent now?`)) moveTo(id, "quote");
+  }, 400);
+}
+function sendInvoice(id) {
+  const j = db.jobs.find((x) => x.id === id);
+  printInvoice(id);
+  if (!j.invoiceNo) return; // invoice not created
+  const hasEmail = clientEmailDraft(j, "Invoice " + j.invoiceNo + ": " + j.title, `Hello,\n\nPlease find attached invoice ${j.invoiceNo} for ${j.title}.\n\nThank you for your business.\n\nKind regards,\n${db.company?.name || "HD Events"}`);
+  if (stageOf(j) === "returned")
+    setTimeout(() => {
+      if (confirm(`The invoice has opened in a new tab: save it as a PDF and attach it to the email${hasEmail ? "" : " (no email address on this client yet)"}.\n\nMark the job as invoiced now?`)) moveTo(id, "invoiced");
+    }, 400);
 }

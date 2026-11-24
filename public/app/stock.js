@@ -16,8 +16,9 @@ export function bounds(job) {
   };
   return [stamp(job.start,false),stamp(job.end,true)];
 }
-// Accessories: items set aside permanently with another item (e.g. an IEC cable kept with a mixing desk).
-// Each main unit takes its accessories, so 2 desks with 1 IEC each set aside 2 IECs.
+// Accessories: other stock items that usually go out with an item (e.g. an IEC cable with a mixing desk).
+// They are added to a job as their own priced lines (and can be removed), so stock is counted per job.
+// allocated() = how many a full set of accessories for all units would need (used for information only).
 export function allocated(inventory,name){
   let n=0;for(const i of inventory||[])for(const a of i.accessories||[])if(a.item===name)n+=(Number(a.qty)||0)*(Number(i.qty)||0);return n;
 }
@@ -34,7 +35,7 @@ export function shortages(job, state) {
   }
   for (const [name, quantity] of needed) {
     const item = state.inventory.find(i=>i.name===name);
-    const owned = item ? item.qty-item.service-allocated(state.inventory,name) : 0;
+    const owned = item ? item.qty-item.service : 0;
     const other = state.jobs.filter(j=>j.id!==job.id && j.booking==='Reserved')
       .map(j=>({title:j.title,time:bounds(j),qty:j.kit.filter(k=>!k.external && k.item===name).reduce((n,k)=>n+k.qty,0)}))
       .filter(j=>j.qty && j.time[0]<end && j.time[1]>start);
@@ -125,10 +126,6 @@ export function validate(state) {
       }
     }
   }
-  for(const item of state.inventory){
-    const set=allocated(state.inventory,item.name);
-    if(set>item.qty-item.service)throw Error(item.name+' — '+set+' set aside as accessories but only '+(item.qty-item.service)+' in service');
-  }
   for(const job of state.jobs){
     if(!['Draft','Reserved','Returned'].includes(job.booking)||!Array.isArray(job.kit)) throw Error('Invalid booking');
     if(job.stage!==undefined&&(!STAGES.includes(job.stage)||STAGE_BOOKING[job.stage]!==job.booking)) throw Error(String(job.title)+' — stage and stock reservation do not match');
@@ -197,8 +194,6 @@ export function loadCheck(job,inventory=[],vehicles=[]){
   let kg=0;const unknown=[];
   for(const line of job.kit||[]){
     if(line.category==='Labour / Crew')continue; // people, not kit
-    // Accessories travel with their main item, so their weight counts too.
-    for(const a of byName.get(line.item)?.accessories||[]){const aw=num(byName.get(a.item)?.weightKg);if(aw!==null)kg+=aw*a.qty*(Number(line.qty)||0);}
     const w=num(line.weightKg??byName.get(line.item)?.weightKg);
     if(w===null){unknown.push(line.item);continue;}
     kg+=w*(Number(line.qty)||0);
