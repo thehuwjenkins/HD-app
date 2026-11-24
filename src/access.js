@@ -13,8 +13,9 @@ export async function staffEmail(request,env,loadKeys=fetch){
   const now=Math.floor(Date.now()/1000);
   let cached=keyCache.get(issuer);
   if(!cached||cached.until<=now){
-    const result=await loadKeys(issuer+'/cdn-cgi/access/certs',{redirect:'error'});
-    if(!result.ok)throw Error('Certificate service unavailable');
+    // 'manual' (not 'error', which Workers may reject): any redirect is simply not OK and is refused.
+    const result=await loadKeys(issuer+'/cdn-cgi/access/certs',{redirect:'manual'});
+    if(!result.ok)throw Error('Certificate service unavailable ('+result.status+')');
     cached={keys:(await result.json()).keys,until:now+300};
     keyCache.set(issuer,cached);
   }

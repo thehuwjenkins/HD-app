@@ -129,7 +129,12 @@ function ownerPage({state,versions},who){
 export default {
 async fetch(req,env){
   let email;
-  try{email=await staffEmail(req,env);}catch{return reply('HD Events HQ · Staff sign-in required',403);}
+  try{email=await staffEmail(req,env);}
+  catch(e){
+    // The reason says which check failed (never any token contents), so sign-in problems can be diagnosed.
+    console.error('sign-in check failed:',e?.message);
+    return reply('HD Events HQ · Staff sign-in required.\n\nThe sign-in pass could not be checked: '+String(e?.message||'unknown').slice(0,120)+'.\nTry signing out at /cdn-cgi/access/logout and in again. If it keeps happening, send this message to Huw.',403);
+  }
   const url=new URL(req.url),owner=email===env.OWNER_EMAIL.trim().toLowerCase(),path=url.pathname;
 
   if(path.startsWith('/api/'))return api(req,env,url,email,owner);

@@ -40,3 +40,7 @@ binding = "AI"
 
 [triggers]
 crons = ["17 2 * * *"]
+
+# Keep request logs (console output) for diagnosing problems.
+[observability]
+enabled = true
