@@ -123,3 +123,12 @@ Then do the restore drill in `RESTORE.md` once.
   - Staff with an email address.
 
   The worker updates it after any save that touches Staff or People & access. This needs the worker secret `CF_ACCESS_TOKEN`: an API token with only *Account > Access: Apps and Policies > Edit*. Without it, saves still work, but the page shows that the sign-in list needs updating.
+
+## Loading inventory from a list
+
+`NODE_USE_ENV_PROXY=1 node --import ./test/register.js tools/import-inventory.mjs items.json`
+
+- Adds new items and updates existing ones (matched by name), all in one save.
+- The save goes through the app's own `applyChanges`, so it is validated, appears in History and can be undone.
+- Add `--dry-run` to preview without saving.
+- Uses `tools/live-d1.mjs`, which talks to the live D1 database through Cloudflare's API.

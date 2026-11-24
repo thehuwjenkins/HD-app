@@ -635,3 +635,15 @@ body { background: var(--bg); }
 .toast { background: #0f1630; border: 0; border-left: 4px solid var(--brand-cyan); }
 .profile-q { border: 0; padding: 0; } .profile-q legend { padding: 0; margin-bottom: 4px; }
 .no-money .money-only { display: none !important; }
+.inv-totals { margin-bottom: 8px; }
+.inv-totals > div .muted { font-size: 13px; }
+.vehicle-pick { margin-top: 14px; }
+.load-box { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface-2); }
+.load-box.ok { border-color: #9fd8b8; background: #eefaf3; }
+.load-box.near { border-color: #f0c98a; background: #fff7e8; }
+.load-box.over { border-color: #f0a59a; background: #fff0ee; }
+.load-box.over b { color: #b42318; }
+.load-box.over .bar span { background: #d92d20; }
+.load-box .bar { flex: none; height: 8px; width: 100%; }
+.est-line { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 14px; color: var(--text-2); cursor: pointer; }
+.est-line input { width: 20px; height: 20px; accent-color: #6d35e8; }

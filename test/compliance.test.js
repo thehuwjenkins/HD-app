@@ -64,3 +64,23 @@ test('suppliers on a plan are validated', () => {
   assert.throws(() => validate(plan([{id: 1, name: 'A'}, {id: 1, name: 'B'}])), /invalid supplier/);
   assert.throws(() => validate(plan([{id: 1, name: 'A', kw: '-3'}])), /power/);
 });
+
+import {inventoryTotals, loadCheck} from '../public/app/stock.js';
+test('inventory totals: value and weight, counting estimates and gaps', () => {
+  const t = inventoryTotals([
+    {name: 'SQ5', qty: 1, value: 2200, valueEst: true, weightKg: 18.5, weightEst: false},
+    {name: 'PS10', qty: 4, value: 600, weightKg: 22.6},
+    {name: 'Custom case', qty: 2, weightKg: 35, weightEst: true},
+    {name: 'XLR', qty: 40},
+  ]);
+  assert.deepEqual(t, {lines: 4, units: 47, value: 4600, weight: 178.9, missingValue: 2, missingWeight: 1, estValue: 1, estWeight: 1});
+});
+test('van load check', () => {
+  const inv = [{name: 'PS10', weightKg: 22.6}, {name: 'Case', weightKg: 35}, {name: 'XLR'}];
+  const vans = [{id: 1, name: 'Transit', payloadKg: 1000}, {id: 2, name: 'Trailer', payloadKg: 750}];
+  const job = {kit: [{item: 'PS10', qty: 20}, {item: 'Case', qty: 16}, {item: 'XLR', qty: 30}], vehicleIds: [1]};
+  const r = loadCheck(job, inv, vans);
+  assert.deepEqual(r, {kg: 1012, unknown: ['XLR'], payload: 1000, vehicles: ['Transit'], pct: 101, over: true});
+  assert.equal(loadCheck({...job, vehicleIds: [1, 2]}, inv, vans).over, false);
+  assert.equal(loadCheck({...job, vehicleIds: []}, inv, vans).pct, null);
+});

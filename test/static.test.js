@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+const sha = (t) => createHash('sha256').update(t).digest('hex');
 import {collect, render} from '../tools/bundle-static.mjs';
 import worker from '../src/worker.js';
 
 test('bundled app files match public/ (run npm run build if this fails)', () => {
-  assert.equal(readFileSync(new URL('../src/static.gen.js', import.meta.url), 'utf8'), render(collect()));
+  assert.equal(sha(readFileSync(new URL('../src/static.gen.js', import.meta.url), 'utf8')), sha(render(collect())), 'src/static.gen.js is out of date: run npm run build');
 });
 
 test('without a static assets binding, the worker serves the bundled files', async () => {

@@ -22,7 +22,7 @@ export const SECTION_KEYS = Object.keys(SECTIONS);
 export const OWNER_PAGES = ['Branding', 'People & access'];
 
 // Money fields per collection (top level), plus job kit line prices.
-const MONEY_FIELDS = {inventory: ['price'], jobs: ['discount'], crewInvites: ['fee'], packages: ['price']};
+const MONEY_FIELDS = {inventory: ['price', 'value', 'valueEst', 'valueNote'], jobs: ['discount'], crewInvites: ['fee'], packages: ['price']};
 // Job fields shown on plans to people who can see the planner but not jobs.
 const JOB_SUMMARY = ['id', 'title', 'start', 'end', 'venue', 'stage', 'booking', 'client'];
 
@@ -91,7 +91,7 @@ export function visibleState(state, versions, who) {
     v[c] = versions[c];
   }
   // Company details and logo are shared; the access list and anything else stays with the owner.
-  for (const k of ['company', 'branding']) if (k in state) { s[k] = state[k]; v.settings[k] = versions.settings[k]; }
+  for (const k of ['company', 'branding', 'vehicles']) if (k in state) { s[k] = state[k]; v.settings[k] = versions.settings[k]; }
   return {state: s, versions: v};
 }
 

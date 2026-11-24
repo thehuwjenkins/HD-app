@@ -102,6 +102,8 @@ export function validate(state) {
     if(typeof item.name!=='string'||!item.name.trim()||names.has(item.name.toLowerCase())) throw Error('Equipment needs a unique name');
     names.add(item.name.toLowerCase());
     if(!Number.isSafeInteger(item.qty)||!Number.isSafeInteger(item.service)||item.service<0||item.qty<item.service) throw Error('Invalid stock count');
+    for(const [f,max] of [['weightKg',5000],['value',1000000],['price',1000000]])
+      if(item[f]!==undefined&&item[f]!==''&&item[f]!==null&&!(Number(item[f])>=0&&Number(item[f])<=max))throw Error(item.name+' — '+(f==='weightKg'?'weight':f)+' must be a number from 0 to '+max);
   }
   for(const job of state.jobs){
     if(!['Draft','Reserved','Returned'].includes(job.booking)||!Array.isArray(job.kit)) throw Error('Invalid booking');
@@ -152,5 +154,32 @@ export function supplierGaps(s,onDate=''){
   return gaps;
 }
 function addMonths(day,n){const d=new Date(day+'T12:00:00Z');d.setUTCMonth(d.getUTCMonth()+n);return d.toISOString().slice(0,10);}
+// ---------- Weights, values and van loads ----------
+const num = (v) => (Number.isFinite(Number(v)) && v !== '' && v !== null && v !== undefined ? Number(v) : null);
+// Totals across the whole inventory. Items without a figure are counted in `missing`.
+export function inventoryTotals(inventory=[]){
+  let units=0,value=0,weight=0,missingValue=0,missingWeight=0,estValue=0,estWeight=0;
+  for(const i of inventory){
+    const q=Number(i.qty)||0;units+=q;
+    const v=num(i.value),w=num(i.weightKg);
+    if(v===null)missingValue++;else{value+=v*q;if(i.valueEst)estValue++;}
+    if(w===null)missingWeight++;else{weight+=w*q;if(i.weightEst)estWeight++;}
+  }
+  return {lines:inventory.length,units,value:Math.round(value*100)/100,weight:Math.round(weight*10)/10,missingValue,missingWeight,estValue,estWeight};
+}
+// Weight of a job's kit against the payload of the vehicles chosen for it.
+export function loadCheck(job,inventory=[],vehicles=[]){
+  const byName=new Map(inventory.map(i=>[i.name,i]));
+  let kg=0;const unknown=[];
+  for(const line of job.kit||[]){
+    const w=num(line.weightKg??byName.get(line.item)?.weightKg);
+    if(w===null){unknown.push(line.item);continue;}
+    kg+=w*(Number(line.qty)||0);
+  }
+  const chosen=vehicles.filter(v=>(job.vehicleIds||[]).map(String).includes(String(v.id)));
+  const payload=chosen.reduce((s,v)=>s+(Number(v.payloadKg)||0),0);
+  kg=Math.round(kg*10)/10;
+  return {kg,unknown,payload,vehicles:chosen.map(v=>v.name),pct:payload?Math.round(kg/payload*100):null,over:payload>0&&kg>payload};
+}
 // Shared with the browser: the owner page loads this file as a module and uses the same checks.
-if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});
+if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, inventoryTotals, loadCheck, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});

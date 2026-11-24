@@ -4,32 +4,157 @@ function equipmentImage(i) {
     ? `<img src="${esc(photo)}" alt="${esc(i.name)}" loading="lazy" onerror="this.replaceWith(document.createTextNode('No photo'))">`
     : '<span class="no-photo">No photo</span>';
 }
+const kg = (n) => (Number(n) || 0).toLocaleString("en-GB", { maximumFractionDigits: 1 }) + " kg";
+const hasNum = (v) => v !== undefined && v !== null && v !== "" && Number.isFinite(Number(v));
+// "12 kg" or "~12 kg" for an estimate, or "—" when unknown.
+const weightText = (i) => (hasNum(i.weightKg) ? (i.weightEst ? "~" : "") + kg(i.weightKg) : "—");
+const valueText = (i) => (!me.money ? "—" : hasNum(i.value) ? (i.valueEst ? "~" : "") + money(i.value) : "—");
 function equipmentCard(i, add) {
-  return `<div class="equipment-card"><div class="equipment-photo">${equipmentImage(i)}</div><div class="equipment-body"><strong>${esc(i.name)}</strong><div class="muted">${Number(i.qty) || 0} owned · ${money(i.price)}</div>${add ? `<button class="btn secondary" type="button" onclick="addKitById(${i.id})">+ Add to job</button>` : `<button class="btn secondary" type="button" onclick="adjustStock(${i.id})">Edit stock</button> <button class="btn secondary" onclick="editEquipmentPhoto(${i.id})">Edit picture</button> <button class="btn secondary" onclick="pickEquipmentPhoto(${i.id})">Upload picture</button>`}</div></div>`;
+  return `<div class="equipment-card"><div class="equipment-photo">${equipmentImage(i)}</div><div class="equipment-body"><strong>${esc(i.name)}</strong><div class="muted">${Number(i.qty) || 0} owned · ${weightText(i)} each${me.money ? " · worth " + valueText(i) : ""}</div>${add ? `<button class="btn secondary" type="button" onclick="addKitById(${i.id})">+ Add to job</button>` : `<button class="btn secondary" type="button" onclick="editItem(${i.id})">Edit</button> <button class="btn secondary" onclick="pickEquipmentPhoto(${i.id})">Upload picture</button>`}</div></div>`;
 }
 function inventory() {
   let matches = db.inventory.filter((i) => i.name.toLowerCase().includes(inventoryQuery.toLowerCase()));
-  let content = `<div class="inventory-tools"><input class="field" placeholder="Search kit by name..." value="${esc(inventoryQuery)}" oninput="inventoryQuery=this.value;updateInventoryResults()"><div class="view-switch"><button class="btn secondary ${inventoryView === "grid" ? "active" : ""}" onclick="inventoryView='grid';updateInventoryResults()">Grid</button><button class="btn secondary ${inventoryView === "list" ? "active" : ""}" onclick="inventoryView='list';updateInventoryResults()">List</button></div></div><div id="inventoryResults">${inventoryResults(matches)}</div>`;
-  return panel(
-    "Kit / Inventory",
-    content +
-      `<details style="margin-top:22px"><summary style="cursor:pointer;font-weight:bold">+ Add equipment to inventory</summary><div style="margin-top:15px">${form(
-        [
-          { name: "name", label: "Equipment name" },
-          { name: "qty", label: "Quantity owned", type: "number", min: 0 },
-          { name: "service", label: "Out for service", type: "number", min: 0 },
-          ...(me.money ? [{ name: "price", label: "Default hire price (£)", type: "number", min: 0, required: false }] : []),
-          { name: "photo", label: "Picture URL (optional)", required: false },
-        ],
-        "addItem",
-        "Add equipment",
-      )}</div></details><p class="muted">Images are optional. Add a direct HTTPS picture URL to an equipment item. The demo does not upload or store image files.</p>`,
+  const t = inventoryTotals(db.inventory);
+  const summary = `<div class="power-grid inv-totals">
+    <div><span class="muted">Equipment lines</span><b>${t.lines}</b><span class="muted">${t.units} units in total</span></div>
+    ${me.money ? `<div><span class="muted">Total kit value</span><b>${money(t.value)}</b><span class="muted">${t.missingValue ? t.missingValue + " without a value" : "All items valued"}${t.estValue ? " · " + t.estValue + " estimated" : ""}</span></div>` : ""}
+    <div><span class="muted">Total weight</span><b>${kg(t.weight)}</b><span class="muted">${t.missingWeight ? t.missingWeight + " without a weight" : "All items weighed"}${t.estWeight ? " · " + t.estWeight + " estimated" : ""}</span></div></div>
+    <p class="hint">~ means an estimate (for example a second-hand value or a custom flight case weight). Weights are per unit as it travels, in its case if it has its own.</p>`;
+  let content = `${summary}<div class="inventory-tools"><input class="field" placeholder="Search kit by name..." value="${esc(inventoryQuery)}" oninput="inventoryQuery=this.value;updateInventoryResults()"><div class="view-switch"><button class="btn secondary ${inventoryView === "grid" ? "active" : ""}" onclick="inventoryView='grid';updateInventoryResults()">Grid</button><button class="btn secondary ${inventoryView === "list" ? "active" : ""}" onclick="inventoryView='list';updateInventoryResults()">List</button></div><button class="btn secondary" onclick="exportInventory()">Export spreadsheet</button></div><div id="inventoryResults">${inventoryResults(matches)}</div>`;
+  return (
+    panel(
+      "Kit / Inventory",
+      content +
+        `<details style="margin-top:22px"><summary style="cursor:pointer;font-weight:bold">+ Add equipment to inventory</summary><div style="margin-top:15px">${form(
+          [
+            { name: "name", label: "Equipment name" },
+            { name: "qty", label: "Quantity owned", type: "number", min: 0 },
+            { name: "service", label: "Out for service", type: "number", min: 0 },
+            { name: "weightKg", label: "Weight each (kg)", type: "number", min: 0, required: false },
+            ...(me.money
+              ? [
+                  { name: "value", label: "Value each (£): what it's worth / cost", type: "number", min: 0, required: false },
+                  { name: "price", label: "Default hire price per day (£)", type: "number", min: 0, required: false },
+                ]
+              : []),
+          ],
+          "addEquipment",
+          "Add equipment",
+        )}</div></details>`,
+    ) + vehiclesPanel()
   );
 }
 function inventoryResults(matches) {
   return inventoryView === "grid"
     ? `<div class="equipment-grid">${matches.map((i) => equipmentCard(i, false)).join("")}</div>`
-    : `<div class="tablewrap"><table><thead><tr><th>Equipment</th><th>Default price</th><th>Owned</th><th>Out of service</th><th>Available before bookings</th><th>Picture</th></tr></thead><tbody>${matches.map((i) => `<tr><td>${esc(i.name)}</td><td>${money(i.price)}</td><td>${i.qty}</td><td>${i.service}</td><td>${Math.max(0, i.qty - i.service)}</td><td><button class="btn secondary" onclick="adjustStock(${i.id})">Stock</button> <button class="btn secondary" onclick="editEquipmentPhoto(${i.id})">Picture</button></td></tr>`).join("")}</tbody></table></div>`;
+    : `<div class="tablewrap"><table><thead><tr><th>Equipment</th><th>Category</th><th>Owned</th><th>Out of service</th><th>Weight each</th>${me.money ? "<th>Value each</th><th>Total value</th><th>Hire price</th>" : ""}<th></th></tr></thead><tbody>${matches
+        .map(
+          (i) =>
+            `<tr><td>${esc(i.name)}</td><td>${esc(i.category || "")}</td><td>${i.qty}</td><td>${i.service}</td><td>${weightText(i)}</td>${me.money ? `<td>${valueText(i)}</td><td>${hasNum(i.value) ? money(i.value * i.qty) : "—"}</td><td>${money(i.price)}</td>` : ""}<td><button class="btn small secondary" onclick="editItem(${i.id})">Edit</button></td></tr>`,
+        )
+        .join("")}</tbody></table></div>`;
+}
+// Edit everything about an item in one form.
+function editItem(id) {
+  const i = db.inventory.find((x) => x.id === id);
+  if (!i) return;
+  const root = document.createElement("div");
+  root.className = "modal";
+  root.id = "itemDialog";
+  const numField = (name, label, value, step = "0.1") => `<label><span class="muted">${label}</span><input class="field" type="number" min="0" step="${step}" name="${name}" value="${hasNum(value) ? esc(value) : ""}"></label>`;
+  const withEst = (field, name, on) => field.replace("</label>", `<span class="est-line"><input type="checkbox" name="${name}" ${on ? "checked" : ""}> This is an estimate</span></label>`);
+  root.innerHTML = `<form class="panel" onsubmit="saveItem(event,${id})"><div class="line"><h2 style="margin:0">Edit ${esc(i.name)}</h2><button type="button" class="btn small ghost" onclick="$('itemDialog').remove()">Close</button></div>
+    <div class="form" style="margin-top:14px">
+      <label class="wide"><span class="muted">Equipment name</span><input class="field" name="name" required value="${esc(i.name)}"></label>
+      <label><span class="muted">Category</span><select class="field" name="category">${cats.map((c) => `<option ${c === i.category ? "selected" : ""}>${c}</option>`).join("")}<option ${i.category === "Cases" ? "selected" : ""}>Cases</option></select></label>
+      ${numField("qty", "Quantity owned", i.qty, "1")}${numField("service", "Out for service", i.service, "1")}
+      ${withEst(numField("weightKg", "Weight each (kg), as it travels", i.weightKg), "weightEst", i.weightEst)}
+      ${me.money ? `${withEst(numField("value", "Value each (£): what it's worth or cost", i.value, "1"), "valueEst", i.valueEst)}${numField("price", "Default hire price per day (£)", i.price, "0.01")}` : ""}
+      <label class="wide"><span class="muted">Notes (model, serial, where the figures came from)</span><textarea class="field" name="notes" rows="2">${esc(i.notes || "")}</textarea></label>
+    </div><div class="toolbar"><button class="btn big" type="submit">Save</button><button type="button" class="btn secondary" onclick="editEquipmentPhoto(${id})">Picture web address</button><button type="button" class="btn danger" onclick="deleteEquipment(${id})">Delete item</button></div></form>`;
+  document.body.appendChild(root);
+}
+function saveItem(e, id) {
+  e.preventDefault();
+  const d = data(e),
+    i = db.inventory.find((x) => x.id === id);
+  const name = d.name.trim();
+  if (db.inventory.some((x) => x.id !== id && x.name.toLowerCase() === name.toLowerCase())) return alert("Another item already has that name.");
+  const n = (v) => (v === "" || v === undefined ? undefined : Number(v));
+  const next = { ...i, name, category: d.category, qty: Number(d.qty) || 0, service: Number(d.service) || 0, weightKg: n(d.weightKg), weightEst: d.weightEst === "on", notes: d.notes.trim() };
+  if (me.money) Object.assign(next, { value: n(d.value), valueEst: d.valueEst === "on", price: Number(d.price) || 0 });
+  for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k];
+  try {
+    validate({ ...db, inventory: db.inventory.map((x) => (x.id === id ? next : x)) });
+  } catch (err) {
+    return alert(err.message);
+  }
+  if (name !== i.name) db.jobs.forEach((j) => (j.kit || []).forEach((k) => k.item === i.name && (k.item = name))); // keep job kit lists linked
+  Object.assign(i, next);
+  for (const k of Object.keys(i)) if (!(k in next)) delete i[k];
+  $("itemDialog")?.remove();
+  save();
+  render();
+}
+function deleteEquipment(id) {
+  const i = db.inventory.find((x) => x.id === id);
+  if (db.jobs.some((j) => (j.kit || []).some((k) => k.item === i.name))) return alert(i.name + " is on a job's kit list. Remove it from those jobs first.");
+  if (!confirm("Delete " + i.name + " from the inventory?")) return;
+  db.inventory = db.inventory.filter((x) => x.id !== id);
+  $("itemDialog")?.remove();
+  save();
+  render();
+}
+// Spreadsheet of the whole inventory (opens in Excel or Google Sheets).
+function exportInventory() {
+  const cell = (v) => {
+    const s = String(v ?? "");
+    return /[",\n]/.test(s) || /^[=+\-@]/.test(s) ? '"' + (/^[=+\-@]/.test(s) ? "'" : "") + s.replace(/"/g, '""') + '"' : s;
+  };
+  const head = ["Equipment", "Category", "Owned", "Out of service", "Weight each (kg)", "Weight estimated", "Total weight (kg)", ...(me.money ? ["Value each (£)", "Value estimated", "Total value (£)", "Hire price per day (£)"] : []), "Notes"];
+  const rows = [...db.inventory]
+    .sort((a, b) => (a.category || "").localeCompare(b.category || "") || a.name.localeCompare(b.name))
+    .map((i) => [
+      i.name, i.category || "", i.qty, i.service,
+      hasNum(i.weightKg) ? i.weightKg : "", i.weightEst ? "Yes" : "", hasNum(i.weightKg) ? Math.round(i.weightKg * i.qty * 10) / 10 : "",
+      ...(me.money ? [hasNum(i.value) ? i.value : "", i.valueEst ? "Yes" : "", hasNum(i.value) ? Math.round(i.value * i.qty * 100) / 100 : "", Number(i.price) || 0] : []),
+      i.notes || "",
+    ]);
+  const t = inventoryTotals(db.inventory);
+  rows.push([], ["TOTAL", "", t.units, "", "", "", t.weight, ...(me.money ? ["", "", t.value, ""] : []), ""]);
+  const csv = "\ufeff" + [head, ...rows].map((r) => r.map(cell).join(",")).join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  a.download = "HD Events inventory " + todayKey() + ".csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+// ---------- Vans and trailers ----------
+function vehicleList() {
+  return Array.isArray(db.vehicles) ? db.vehicles : [];
+}
+function vehiclesPanel() {
+  const list = vehicleList();
+  return panel(
+    "Vans & trailers",
+    `<p class="hint">Add each vehicle's payload (the most it can carry, from the plate inside the door or the V5C: gross weight minus kerb weight). Jobs then show whether the kit fits.</p>
+    ${list.map((v) => row(`<b>${esc(v.name)}</b>`, `${kg(v.payloadKg)} payload ${me.owner ? `<button class="btn small ghost" onclick="removeVehicle(${v.id})">Remove</button>` : ""}`)).join("") || '<p class="empty">No vehicles yet.</p>'}
+    ${me.owner ? `<form class="toolbar" style="margin-top:12px" onsubmit="addVehicle(event)"><input class="field" style="flex:2;min-width:180px" name="name" required placeholder="e.g. Transit LWB or 2.7t box trailer"><input class="field" style="flex:1;min-width:130px" name="payloadKg" type="number" min="1" required placeholder="Payload kg"><button class="btn">Add vehicle</button></form>` : ""}`,
+  );
+}
+function addVehicle(e) {
+  e.preventDefault();
+  const d = data(e);
+  db.vehicles = [...vehicleList(), { id: uid(), name: d.name.trim(), payloadKg: Number(d.payloadKg) }];
+  save();
+  render();
+}
+function removeVehicle(id) {
+  if (!confirm("Remove this vehicle?")) return;
+  db.vehicles = vehicleList().filter((v) => v.id !== id);
+  save();
+  render();
 }
 function updateInventoryResults() {
   let el = $("inventoryResults");
@@ -54,7 +179,7 @@ function editEquipmentPhoto(id) {
   save();
   render();
 }
-function addItem(e) {
+function addEquipment(e) {
   e.preventDefault();
   let d = data(e);
   if (db.inventory.some((i) => i.name.toLowerCase() === d.name.toLowerCase())) {
@@ -71,7 +196,9 @@ function addItem(e) {
     qty: +d.qty,
     service: +d.service,
     price: +d.price || 0,
-    photo: /^https:\/\//i.test(d.photo || "") ? d.photo : "",
+    ...(d.weightKg ? { weightKg: Number(d.weightKg) } : {}),
+    ...(d.value ? { value: Number(d.value) } : {}),
+    photo: "",
   });
   save();
   render();
