@@ -444,3 +444,30 @@ textarea.field { min-height: 110px; }
   .btn { min-height: 50px; }
   h1 { font-size: 30px; }
 }
+/* Professional planner: profile, why-this-matters, suppliers & power, compliance pack */
+.profile-q { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; margin: 0; }
+.profile-q legend { padding: 0 6px; font-weight: 600; }
+.profile-q legend .muted { display: block; font-weight: 400; font-size: 13px; }
+.profile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; margin: 10px 0 14px; }
+.check-card { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 10px 14px; border: 1px solid var(--border-strong); border-radius: 14px; background: #08090e; cursor: pointer; }
+.check-card.small { min-height: 46px; font-size: 14px; }
+.check-card input { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
+.check-card:has(input:checked) { border-color: var(--accent); background: #00eeed14; }
+.why { border-left: 3px solid var(--purple); background: #9145ff14; border-radius: 0 12px 12px 0; padding: 10px 14px; margin-bottom: 12px; }
+.why p { margin: 4px 0 0; color: var(--text-2); line-height: 1.5; }
+.tag.cert { background: #9145ff26; color: #c9adff; }
+.tag.cert.success { background: var(--ok-bg); color: var(--ok); }
+.supplier { margin-bottom: 10px; padding: 16px 20px; }
+.supplier summary { cursor: pointer; list-style: none; }
+.supplier summary::-webkit-details-marker { display: none; }
+.supplier[open] summary { margin-bottom: 12px; }
+.power-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.power-grid > div { background: #08090e; border: 1px solid var(--border); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 4px; }
+.power-grid b { font-size: 24px; font-weight: 600; color: var(--accent); }
+.comp-head { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.comp-head > div { flex: 1; min-width: 200px; }
+.comp-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 8px; background: var(--surface); }
+.comp-row .grow { display: flex; flex-direction: column; min-width: 0; }
+.comp-mark { width: 30px; height: 30px; flex: none; border-radius: 50%; display: grid; place-items: center; font-weight: 700; background: var(--warn-bg); color: var(--warn); }
+.comp-row.ok .comp-mark { background: var(--ok-bg); color: var(--ok); }
+@media (min-width: 821px) { .tabs { flex-wrap: wrap; } .tabs button { padding: 14px 14px; } }

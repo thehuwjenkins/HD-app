@@ -4,7 +4,20 @@ let plannerId = null,
   plannerTab = "checklist";
 const plannerOpen = new Set(); // checklist items whose details are expanded
 
-const DOC_LABELS = { ra: "Risk assessment", fra: "Fire risk assessment", ms: "Method statement", hs: "Event safety plan", other: "Document" };
+const DOC_LABELS = {
+  ra: "Risk assessment",
+  fra: "Fire risk assessment",
+  ms: "Method statement",
+  hs: "Event safety management plan",
+  evac: "Emergency & evacuation plan",
+  medical: "Medical needs assessment",
+  crowd: "Crowd management plan",
+  traffic: "Traffic management plan",
+  noise: "Noise management plan",
+  bar: "Bar management plan",
+  other: "Document",
+};
+const DOC_STAGE = { ra: "risk", fra: "risk", ms: "method", hs: "safety", evac: "safety", medical: "safety", crowd: "risk", traffic: "method", noise: "venue", bar: "bars", other: "safety" };
 const STATUS_LABELS = { todo: "To do", doing: "In progress", done: "Done", na: "Not needed" };
 const currentPlan = () => db.plans.find((p) => p.id === plannerId);
 const planJob = (p) => db.jobs.find((j) => j.id === p.jobId);
@@ -89,6 +102,8 @@ function planDialog(jobId) {
       <label class="wide"><span class="muted">Venue or site address</span><input class="field" name="venue" value="${esc(job?.venue || "")}" placeholder="e.g. Aberavon Beach, Port Talbot"></label>
       <label><span class="muted">Expected capacity</span><input class="field" type="number" min="0" name="capacity" placeholder="e.g. 3000"></label>
       <label><span class="muted">Template</span><select class="field" name="template">${Object.entries(PLAN_TEMPLATES).map(([k, t]) => `<option value="${k}">${esc(t.name)}</option>`).join("")}</select></label>
+      <fieldset class="wide profile-q"><legend>What's happening at this event? <span class="muted">Tick everything that applies. The checklist adds the licences, certificates and safety documents each one needs.</span></legend>
+        <div class="profile-grid">${PLAN_PROFILE.map(([k, l, i]) => `<label class="check-card"><input type="checkbox" name="pf_${k}"><span aria-hidden="true">${i}</span> ${esc(l)}</label>`).join("")}</div></fieldset>
       <label class="wide"><span class="muted">Job</span><select class="field" name="jobId"><option value="">Create a new job (as an enquiry)</option>${free.map((j) => `<option value="${j.id}" ${j.id === jobId ? "selected" : ""}>${esc(j.title)} · ${esc(fmtRange(j))}</option>`).join("")}</select><span class="hint">The plan is linked to a job, so kit, crew and the pipeline stay in step.</span></label>
     </div><button class="btn big" type="submit">Create plan</button></form>`;
   document.body.appendChild(root);
@@ -97,6 +112,7 @@ function planDialog(jobId) {
 function createPlan(e) {
   e.preventDefault();
   const d = data(e);
+  const profile = Object.fromEntries(PLAN_PROFILE.map(([k]) => [k, d["pf_" + k] === "on"]));
   let jobId = Number(d.jobId) || null;
   if (!jobId) {
     jobId = uid();
@@ -111,8 +127,10 @@ function createPlan(e) {
     venue: d.venue || "",
     capacity: Number(d.capacity) || null,
     template: d.template,
+    profile,
     createdAt: new Date().toISOString(),
-    stages: planFromTemplate(d.template, d.eventDate),
+    stages: planFromTemplate(d.template, d.eventDate, { ...profile, capacity: Number(d.capacity) || 0 }),
+    suppliers: [],
     site: { address: d.venue || "", features: [] },
     creative: { theme: "", vibe: "", audience: "", palette: ["#0b1120", "#67d5ed", "#f5b85c", "#ff5d8f"], notes: "", images: [] },
     posters: [],
@@ -131,16 +149,18 @@ const PLAN_TABS = [
   ["creative", "Creative", "🎨"],
   ["posters", "Posters", "🖼️"],
   ["docs", "Safety documents", "📄"],
+  ["suppliers", "Suppliers & power", "⚡"],
+  ["compliance", "Compliance", "🛡️"],
 ];
 function planWorkspace(p) {
   const pr = planProgress(p),
     job = planJob(p);
   const docs = planDocs(p),
     approved = docs.filter((x) => x.item.doc.status === "approved").length;
-  const body = { checklist: planChecklist, site: siteMap, creative: creativeBoard, posters: posterStudio, docs: planDocuments }[plannerTab] || planChecklist;
+  const body = { checklist: planChecklist, site: siteMap, creative: creativeBoard, posters: posterStudio, docs: planDocuments, suppliers: planSuppliers, compliance: planCompliance }[plannerTab] || planChecklist;
   return `<div class="toolbar"><button class="btn small ghost" onclick="plannerId=null;render()">← All plans</button></div>
   <div class="plan-head">${ring(pr.pct, 72)}<div class="grow"><h2>${esc(p.title)}</h2><div class="muted">${p.eventDate ? esc(fmtDay(p.eventDate, { weekday: "long", day: "numeric", month: "long", year: "numeric" })) : "Date not set"}${p.venue ? " · " + esc(p.venue) : ""}${p.capacity ? " · " + p.capacity.toLocaleString("en-GB") + " capacity" : ""}</div>
-  <div class="toolbar" style="margin:8px 0 0">${job ? stageTag(job) + ` <button class="btn small secondary" onclick="openJob(${job.id})">Open job</button>` : ""}<button class="btn small ghost" onclick="editPlanDetails()">Edit details</button></div></div>
+  <div class="toolbar" style="margin:8px 0 0">${job ? stageTag(job) + ` <button class="btn small secondary" onclick="openJob(${job.id})">Open job</button>` : ""}<button class="btn small ghost" onclick="editPlanDetails()">Edit details</button><button class="btn small ghost" onclick="profileDialog()">Event profile</button></div></div>
   <div class="countdown"><b>${countdown(p.eventDate)}</b><span>${pr.done} of ${pr.total} done · ${approved}/${docs.length} documents approved</span></div></div>
   <div class="tabs" role="tablist">${PLAN_TABS.map(([k, l, i]) => `<button role="tab" aria-selected="${k === plannerTab}" class="${k === plannerTab ? "active" : ""}" onclick="plannerTab='${k}';render()"><span aria-hidden="true">${i}</span> ${l}</button>`).join("")}</div>
   <div id="planBody">${body(p)}</div>`;
@@ -192,7 +212,7 @@ function planChecklist(p) {
             const open = plannerOpen.has(i.id);
             return `<div class="item ${i.status}"><div class="item-row">
             <button class="status-btn" data-status="${i.status}" onclick="cycleItem(${i.id})" title="${STATUS_LABELS[i.status]}: click to change" aria-label="${esc(i.title)}: ${STATUS_LABELS[i.status]}">${{ todo: "", doing: "◐", done: "✓", na: "–" }[i.status]}</button>
-            <button class="item-title" onclick="toggleItem(${i.id})" aria-expanded="${open}">${esc(i.title)}${i.doc ? ` <span class="tag ${i.doc.status === "approved" ? "success" : "warning"}">${i.doc.status === "approved" ? "Approved" : "Draft: needs review"}</span>` : ""}${i.files?.length ? ` <span class="muted">📎${i.files.length}</span>` : ""}</button>
+            <button class="item-title" onclick="toggleItem(${i.id})" aria-expanded="${open}">${esc(i.title)}${i.doc ? ` <span class="tag ${i.doc.status === "approved" ? "success" : "warning"}">${i.doc.status === "approved" ? "Approved" : "Draft: needs review"}</span>` : ""}${i.cert ? ` <span class="tag cert ${i.files?.length ? "success" : ""}" title="Certificate or evidence to file">${i.files?.length ? "📎 Filed" : "Certificate"}</span>` : i.files?.length ? ` <span class="muted">📎${i.files.length}</span>` : ""}</button>
             ${i.owner ? `<span class="chip small">${esc(i.owner)}</span>` : ""}${i.due ? `<span class="tag ${late ? "warning" : ""}">${late ? "Overdue · " : ""}${fmtDay(i.due, { day: "numeric", month: "short" })}</span>` : ""}</div>
             ${open ? itemDetails(p, i) : ""}</div>`;
           })
@@ -203,8 +223,10 @@ function planChecklist(p) {
       .join("");
 }
 function itemDetails(p, i) {
-  const link = { creative: ["🎨 Open creative board", "plannerTab='creative';render()"], posters: ["🖼️ Open poster studio", "plannerTab='posters';render()"], site: ["🗺️ Open site map", "plannerTab='site';render()"], job: ["Open job", `openJob(${p.jobId})`], crosshire: ["Open cross-hire", "go('Cross-hire')"] }[i.link];
+  const link = { creative: ["🎨 Open creative board", "plannerTab='creative';render()"], posters: ["🖼️ Open poster studio", "plannerTab='posters';render()"], site: ["🗺️ Open site map", "plannerTab='site';render()"], suppliers: ["🤝 Open suppliers & power", "plannerTab='suppliers';render()"], job: ["Open job", `openJob(${p.jobId})`], crosshire: ["Open cross-hire", "go('Cross-hire')"] }[i.link];
   return `<div class="item-details">
+    ${i.why ? `<div class="why"><b>Why this matters</b><p>${esc(i.why)}</p></div>` : ""}
+    ${i.cert ? `<p class="hint">📎 Attach the certificate or evidence here so it goes into the compliance pack.</p>` : ""}
     <div class="form">
       <label><span class="muted">Status</span><select class="field" onchange="setItem(${i.id},'status',this.value)">${PLAN_STATUSES.map((s) => `<option value="${s}" ${s === i.status ? "selected" : ""}>${STATUS_LABELS[s]}</option>`).join("")}</select></label>
       <label><span class="muted">Owner</span><input class="field" list="ownerNames" value="${esc(i.owner)}" onchange="setItem(${i.id},'owner',this.value)" placeholder="Who's doing it?"></label>
@@ -307,6 +329,12 @@ const DOC_SKELETONS = {
   fra: "FIRE RISK ASSESSMENT\n\nEvent:\nSite:\nResponsible person:\n\n1. Fire hazards (sources of ignition, fuel, oxygen)\n2. People at risk\n3. Evaluate, remove, reduce, protect\n4. Fire detection and warning\n5. Firefighting equipment and fire points\n6. Escape routes, exits and assembly points\n7. Emergency plan and staff training\n8. Record, review, update\n",
   ms: "METHOD STATEMENT\n\nTask:\nEvent / site:\nSupervisor:\n\nScope of work:\n\nPeople and competence:\n\nEquipment and plant:\n\nSequence of work:\n1. \n2. \n3. \n\nPPE:\n\nHazards and controls (see risk assessment):\n\nEmergency arrangements:\n",
   hs: "EVENT SAFETY MANAGEMENT PLAN\n\n1. Event overview (dates, times, capacity, audience)\n2. Roles and responsibilities\n3. Site plan and layout\n4. Crowd management\n5. Medical and first aid\n6. Fire safety\n7. Emergency and evacuation procedures\n8. Communications\n9. Welfare and accessibility\n10. Build and derig safety\n11. Weather plan\n12. Licensing conditions\n",
+  evac: "EMERGENCY AND EVACUATION PLAN\n\nEvent:\nSite:\nEvent safety officer / person in charge:\n\n1. Raising the alarm (who decides, code words, PA message)\n2. Show stop procedure (who can stop the show, script for the stage)\n3. Partial evacuation and full evacuation routes (see site plan)\n4. Exits: number, width and stewarding\n5. Assembly points\n6. Emergency vehicle access routes and rendezvous points (RVPs)\n7. People needing assistance (disabled visitors, children)\n8. Lost children / vulnerable persons during an evacuation\n9. Liaison with police, fire and ambulance\n10. Communications (radio channels, call signs)\n11. Shelter in place / lockdown (severe weather, external threat)\n12. Re-entry and recovery\n",
+  medical: "MEDICAL AND FIRST AID NEEDS ASSESSMENT\n\nEvent:\nDate(s) and hours:\nExpected capacity (peak):\nAudience profile (age, alcohol, activities):\n\n1. Event type and risk factors\n2. Distance and journey time to nearest A&E\n3. Provision: first aiders, paramedics, doctors, ambulances\n4. Treatment area location and access\n5. Medical provider (name, CQC registration if applicable)\n6. Communications with event control\n7. Records and patient report forms\n8. Liaison with the local ambulance service\n9. Welfare and drugs/alcohol support\n",
+  crowd: "CROWD MANAGEMENT PLAN\n\nEvent:\nSite capacity (calculated):\nPeak expected attendance:\n\n1. Capacity calculation (usable area, density, exit capacity)\n2. Ingress: gates, queueing, searching, ticket checks\n3. Circulation and pinch points\n4. Front of stage arrangements and barriers\n5. Egress: routes, timings, transport\n6. Stewarding plan (numbers, positions, briefings)\n7. Monitoring crowd density and behaviour\n8. Triggers and actions (slow ingress, close areas, show stop)\n9. Communications and PA messages\n",
+  traffic: "TRAFFIC MANAGEMENT PLAN\n\nEvent:\nSite:\n\n1. Site access points and routes for traffic\n2. Separation of vehicles and pedestrians\n3. Build and derig vehicle movements, banksmen, site speed limit\n4. Parking (public, crew, traders, accessible parking)\n5. Road closures and signage (highway authority approval)\n6. Emergency vehicle routes (kept clear at all times)\n7. Public transport, taxis and drop-off\n",
+  noise: "NOISE MANAGEMENT PLAN\n\nEvent:\nSite:\nHours of amplified sound:\n\n1. Agreed limits (off-site and mix position)\n2. Monitoring positions and who monitors\n3. Speaker system design and orientation\n4. Curfew\n5. Complaints line and response\n6. Staff hearing protection (Noise at Work Regulations 2005)\n",
+  bar: "BAR MANAGEMENT PLAN\n\nEvent:\nBar operator:\nPersonal licence holder / DPS:\nLicence or TEN reference:\n\n1. Licensable hours and conditions\n2. Staffing and training (Challenge 21/25, refusals log)\n3. Preventing drunkenness and refusing service\n4. Free drinking water\n5. Drinkware (polycarbonate / plastic) and glass collection\n6. Drink spiking and welfare (Ask for Angela)\n7. Cash handling and security\n8. Cellar, CO2 and gas cylinder safety\n9. Queue management\n10. Closing procedure\n",
   other: "",
 };
 function planDocs(p) {
@@ -367,13 +395,19 @@ function unapproveDoc(id) {
 }
 function addDoc() {
   const kinds = Object.entries(DOC_LABELS);
-  const pick = prompt("Which kind of document?\n" + kinds.map(([, l], n) => n + 1 + ". " + l).join("\n"), "3");
+  const pick = prompt("Which kind of document?\n" + kinds.map(([, l], n) => n + 1 + ". " + l).join("\n"), "1");
   const kind = kinds[Number(pick) - 1]?.[0];
   if (!kind) return;
   const title = prompt("Title", DOC_LABELS[kind]);
   if (!title) return;
-  const stageKey = { ra: "risk", fra: "risk", ms: "method", hs: "safety", other: "safety" }[kind];
-  currentPlan().stages.find((s) => s.key === stageKey).items.push({ id: uid(), title, status: "todo", owner: "", due: "", notes: "", files: [], doc: { kind, content: "", status: "draft" } });
+  const p = currentPlan();
+  let stage = p.stages.find((s) => s.key === DOC_STAGE[kind]) || p.stages.find((s) => s.key === "safety");
+  if (!stage) {
+    const [key, name, icon] = PLAN_STAGES.find(([k]) => k === DOC_STAGE[kind]);
+    stage = { key, name, icon, items: [] };
+    p.stages.push(stage);
+  }
+  stage.items.push({ id: uid(), title, status: "todo", owner: "", due: "", notes: "", files: [], doc: { kind, content: "", status: "draft" } });
   save();
   planRefresh();
 }

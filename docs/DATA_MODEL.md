@@ -86,3 +86,12 @@ fingerprint no longer matches and the save is refused unless the document goes b
 document therefore always matches what was signed off.
 
 Plan deadlines appear on the calendar.
+
+## Event plan: profile, suppliers and compliance
+
+- `plan.profile`: answers to the event questions (outdoor, alcohol, food, liveMusic, structures, generators, rigging, children, camping, traffic, sfx, drones). Together with `plan.capacity`, it decides which checklist items `planFromTemplate` includes. Changing the profile later only adds missing items; it never deletes any.
+- Checklist items can have `why` (the reason and the UK law or guidance behind it) and `cert: true` (a certificate or evidence to attach).
+- `plan.suppliers[]`: `{id, name, type, contact, kw, phase, needsPower, pliExpiry, ra, ms, pat, foodReg, hygiene, gas, gasCert, licence, calcs, elecCert, sia, medPlan, notes, files}`.
+  - `supplierGaps()` in stock.js lists missing evidence.
+  - `powerEstimate()` sizes a generator: kW × 0.7 diversity ÷ 0.8 power factor × 1.25 headroom. This is a planning estimate only; the BS 7909 design is done by a competent electrician.
+- Document kinds: ra, fra, ms, hs, evac, medical, crowd, traffic, noise, bar, other.

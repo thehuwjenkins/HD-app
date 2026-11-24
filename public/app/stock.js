@@ -49,7 +49,7 @@ export function fingerprint(text){
   return (4294967296*(2097151&h2)+(h1>>>0)).toString(36);
 }
 export const PLAN_STATUSES=['todo','doing','done','na'];
-export const DOC_KINDS=['ra','fra','ms','hs','other'];
+export const DOC_KINDS=['ra','fra','ms','hs','evac','medical','crowd','traffic','noise','bar','other'];
 // Event plans: checklist shape, and safety documents can only be "approved" with a named approver
 // and an approval that matches the current text.
 function validatePlans(plans){
@@ -61,6 +61,16 @@ function validatePlans(plans){
     ids.add(p.id);
     if(typeof p.title!=='string'||!p.title.trim())throw Error('An event plan needs a name');
     if(!Array.isArray(p.stages))throw Error(p.title+' — checklist missing');
+    if(p.suppliers!==undefined){
+      if(!Array.isArray(p.suppliers))throw Error(p.title+' — suppliers list invalid');
+      const sids=new Set();
+      for(const s of p.suppliers){
+        if(!Number.isSafeInteger(s.id)||sids.has(s.id))throw Error(p.title+' — invalid supplier');
+        sids.add(s.id);
+        if(typeof s.name!=='string'||!s.name.trim())throw Error(p.title+' — a supplier needs a name');
+        if(s.kw!==undefined&&s.kw!==''&&!(Number(s.kw)>=0&&Number(s.kw)<=5000))throw Error(s.name+' — power must be between 0 and 5000 kW');
+      }
+    }
     for(const st of p.stages){
       if(!Array.isArray(st.items))throw Error(p.title+' — checklist stage missing items');
       for(const it of st.items){
@@ -104,5 +114,43 @@ export function validate(state) {
     if(issue)throw Error(job.title+' — '+issue.name+' short by '+issue.short+(issue.conflicts.length?' (overlaps '+issue.conflicts.join(', ')+')':''));
   }
 }
+
+// ---------- Event power and supplier compliance ----------
+// Rough generator sizing from what each supplier says they will plug in. A planning estimate only:
+// a competent electrician designs the actual system (BS 7909).
+export const GENERATOR_SIZES=[20,30,45,60,100,150,200,250,350,500,800,1000];
+export function powerEstimate(suppliers=[],{diversity=0.7,powerFactor=0.8,headroom=1.25}={}){
+  const kw=suppliers.reduce((t,s)=>t+(Number(s.kw)>0?Number(s.kw):0),0);
+  const threePhase=suppliers.some(s=>s.phase==='3');
+  const kva=kw*diversity/powerFactor*headroom;
+  const size=kw?GENERATOR_SIZES.find(g=>g>=kva)||null:null;
+  // Current per phase: single phase at 230 V, or balanced three phase at 400 V.
+  const amps1=Math.round(kw*diversity*1000/230), amps3=Math.round(kw*diversity*1000/(Math.sqrt(3)*400*powerFactor));
+  return {kw:Math.round(kw*10)/10, kva:Math.round(kva*10)/10, size, threePhase, amps1, amps3, missing:suppliers.filter(s=>s.needsPower!==false&&!(Number(s.kw)>0)).length};
+}
+// Which compliance evidence a supplier still owes, as plain-English labels.
+export const SUPPLIER_TYPES={av:'AV, lighting & staging',bar:'Bar',food:'Food trader',structure:'Structures & marquees',power:'Power & generators',security:'Security',medical:'Medical',welfare:'Toilets & welfare',other:'Other'};
+export function supplierGaps(s,onDate=''){
+  const gaps=[], when=onDate||new Date().toISOString().slice(0,10);
+  if(!s.pliExpiry)gaps.push('Public liability certificate');
+  else if(s.pliExpiry<when)gaps.push('Public liability expired');
+  if(!s.ra)gaps.push('Risk assessment');
+  if(!s.ms)gaps.push('Method statement');
+  if(s.needsPower!==false&&s.type!=='security'&&s.type!=='medical'&&!(Number(s.kw)>0))gaps.push('Power requirement');
+  if(s.needsPower!==false&&['av','bar','food','power'].includes(s.type)&&!s.pat)gaps.push('PAT / electrical test records');
+  else if(s.pat&&s.pat<addMonths(when,-12))gaps.push('PAT records over 12 months old');
+  if(s.type==='food'){
+    if(!s.foodReg)gaps.push('Food business registration');
+    if(!s.hygiene)gaps.push('Food hygiene rating');
+    if(s.gas!==false&&!s.gasCert)gaps.push('Gas safety certificate (LPG)');
+  }
+  if(s.type==='bar'&&!s.licence)gaps.push('Personal licence holder');
+  if(s.type==='structure'&&!s.calcs)gaps.push('Structural calculations / design certificate');
+  if(s.type==='power'&&!s.elecCert)gaps.push('Electrical installation certificate (BS 7909)');
+  if(s.type==='security'&&!s.sia)gaps.push('SIA licence numbers');
+  if(s.type==='medical'&&!s.medPlan)gaps.push('Medical plan / CQC registration');
+  return gaps;
+}
+function addMonths(day,n){const d=new Date(day+'T12:00:00Z');d.setUTCMonth(d.getUTCMonth()+n);return d.toISOString().slice(0,10);}
 // Shared with the browser: the owner page loads this file as a module and uses the same checks.
-if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS});
+if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});
