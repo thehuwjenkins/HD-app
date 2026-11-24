@@ -159,5 +159,7 @@ async fetch(req,env){
 // Daily backup, set by the cron trigger in wrangler.toml.
 async scheduled(event,env,ctx){
   ctx.waitUntil(runBackup(env,{kind:'daily',now:new Date(event.scheduledTime)}));
+  // Nightly check that the Cloudflare sign-in list still matches Staff and People & access.
+  ctx.waitUntil((async()=>{if(await isMigrated(env))await syncAccess(env,(await loadState(env)).state);})().catch(()=>{}));
 }
 };
