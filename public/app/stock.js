@@ -16,6 +16,15 @@ export function bounds(job) {
   };
   return [stamp(job.start,false),stamp(job.end,true)];
 }
+// Accessories: items set aside permanently with another item (e.g. an IEC cable kept with a mixing desk).
+// Each main unit takes its accessories, so 2 desks with 1 IEC each set aside 2 IECs.
+export function allocated(inventory,name){
+  let n=0;for(const i of inventory||[])for(const a of i.accessories||[])if(a.item===name)n+=(Number(a.qty)||0)*(Number(i.qty)||0);return n;
+}
+// Who an item is set aside with, e.g. [{main:'SQ5',qty:1}].
+export function allocatedTo(inventory,name){
+  const out=[];for(const i of inventory||[])for(const a of i.accessories||[])if(a.item===name)out.push({main:i.name,qty:(Number(a.qty)||0)*(Number(i.qty)||0)});return out;
+}
 export function shortages(job, state) {
   const [start,end] = bounds(job);
   const issues = [];
@@ -25,7 +34,7 @@ export function shortages(job, state) {
   }
   for (const [name, quantity] of needed) {
     const item = state.inventory.find(i=>i.name===name);
-    const owned = item ? item.qty-item.service : 0;
+    const owned = item ? item.qty-item.service-allocated(state.inventory,name) : 0;
     const other = state.jobs.filter(j=>j.id!==job.id && j.booking==='Reserved')
       .map(j=>({title:j.title,time:bounds(j),qty:j.kit.filter(k=>!k.external && k.item===name).reduce((n,k)=>n+k.qty,0)}))
       .filter(j=>j.qty && j.time[0]<end && j.time[1]>start);
@@ -104,6 +113,21 @@ export function validate(state) {
     if(!Number.isSafeInteger(item.qty)||!Number.isSafeInteger(item.service)||item.service<0||item.qty<item.service) throw Error('Invalid stock count');
     for(const [f,max] of [['weightKg',5000],['value',1000000],['price',1000000],['lengthCm',2000],['widthCm',2000],['heightCm',2000]])
       if(item[f]!==undefined&&item[f]!==''&&item[f]!==null&&!(Number(item[f])>=0&&Number(item[f])<=max))throw Error(item.name+' — '+(f==='weightKg'?'weight':f)+' must be a number from 0 to '+max);
+    if(item.accessories!==undefined){
+      if(!Array.isArray(item.accessories))throw Error(item.name+' — invalid accessories');
+      const seen=new Set();
+      for(const a of item.accessories){
+        if(!a||typeof a.item!=='string'||!state.inventory.some(x=>x.name===a.item))throw Error(item.name+' — accessory "'+(a?.item||'')+'" is not in the inventory');
+        if(a.item===item.name)throw Error(item.name+' cannot be its own accessory');
+        if(seen.has(a.item))throw Error(item.name+' — '+a.item+' is listed twice as an accessory');
+        seen.add(a.item);
+        if(!Number.isSafeInteger(a.qty)||a.qty<1||a.qty>100)throw Error(item.name+' — accessory quantity must be 1 to 100');
+      }
+    }
+  }
+  for(const item of state.inventory){
+    const set=allocated(state.inventory,item.name);
+    if(set>item.qty-item.service)throw Error(item.name+' — '+set+' set aside as accessories but only '+(item.qty-item.service)+' in service');
   }
   for(const job of state.jobs){
     if(!['Draft','Reserved','Returned'].includes(job.booking)||!Array.isArray(job.kit)) throw Error('Invalid booking');
@@ -173,6 +197,8 @@ export function loadCheck(job,inventory=[],vehicles=[]){
   let kg=0;const unknown=[];
   for(const line of job.kit||[]){
     if(line.category==='Labour / Crew')continue; // people, not kit
+    // Accessories travel with their main item, so their weight counts too.
+    for(const a of byName.get(line.item)?.accessories||[]){const aw=num(byName.get(a.item)?.weightKg);if(aw!==null)kg+=aw*a.qty*(Number(line.qty)||0);}
     const w=num(line.weightKg??byName.get(line.item)?.weightKg);
     if(w===null){unknown.push(line.item);continue;}
     kg+=w*(Number(line.qty)||0);
@@ -292,4 +318,4 @@ export function importRows(text){
   return {items,skipped,columns:map.filter(Boolean)};
 }
 // Shared with the browser: the owner page loads this file as a module and uses the same checks.
-if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, inventoryTotals, loadCheck, parseTable, importRows, loadItems, packVehicle, planLoad, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});
+if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, allocated, allocatedTo, inventoryTotals, loadCheck, parseTable, importRows, loadItems, packVehicle, planLoad, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});

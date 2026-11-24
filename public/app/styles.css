@@ -681,3 +681,8 @@ body { background: var(--bg); }
 .time-unit .field { min-width: 58px; }
 .time-unit select.field { flex: 0 0 86px; padding-left: 10px; }
 .import-head { white-space: pre-wrap; font-size: 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px; }
+.acc-note { font-size: 13px; color: var(--purple); margin-top: 2px; }
+.acc-box { border: 1px solid var(--border); border-radius: 14px; padding: 12px; background: var(--surface-2); }
+.acc-row { display: grid; grid-template-columns: 1fr 90px 40px; gap: 8px; align-items: center; margin-top: 8px; }
+.acc-add { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.acc-add select { flex: 1 1 200px; }

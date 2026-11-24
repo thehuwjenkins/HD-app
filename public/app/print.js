@@ -23,7 +23,7 @@ td.num,th.num{text-align:right}td.box{width:44px;text-align:center}.box i{displa
 .sign{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:26px}.sign div{border-top:1px solid #111827;padding-top:4px;font-size:11px;color:#374151}
 .foot{margin-top:22px;padding-top:8px;border-top:1px solid #e5e7eb;font-size:10px;color:#6b7280}
 svg{max-width:100%;height:auto;display:block;margin:6px 0}.swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px}
-.stage-h{break-after:avoid}.lead-title{font:700 24px/1.2 Arial,sans-serif;margin:16px 0 14px}
+.stage-h{break-after:avoid}tr.acc td{font-size:11px;background:#fbfbfd}tr.acc td:nth-child(4){padding-left:18px}.lead-title{font:700 24px/1.2 Arial,sans-serif;margin:16px 0 14px}
 @media print{body{background:#fff}.actions{display:none!important}.sheet{box-shadow:none;margin:0;max-width:none;padding:0}
 @page{size:A4;margin:12mm}.logo,.ph:after,th,.cat td,.swatch,svg{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
 
@@ -113,7 +113,14 @@ function printJob(id) {
               i.notes ? esc(i.notes) : "",
               issue ? `<span class="warn">SHORT ${issue.short}: cross-hire needed</span>` : "",
             ].filter(Boolean).join(" · ");
-            return `<tr><td class="box"><i></i></td><td class="box"><i></i></td><td class="num"><b>${k.qty}</b></td><td><b>${esc(k.item)}</b></td><td>${details}</td><td class="num">${hasNum(i.weightKg) ? kg(i.weightKg * k.qty) : ""}</td></tr>`;
+            const acc = (i.accessories || [])
+              .map((x) => {
+                const ai = inv.get(x.item) || {},
+                  n = x.qty * k.qty;
+                return `<tr class="acc"><td class="box"><i></i></td><td class="box"><i></i></td><td class="num">${n}</td><td>↳ ${esc(x.item)}</td><td class="muted">Accessory: stays with ${esc(k.item)}</td><td class="num">${hasNum(ai.weightKg) ? kg(ai.weightKg * n) : ""}</td></tr>`;
+              })
+              .join("");
+            return `<tr><td class="box"><i></i></td><td class="box"><i></i></td><td class="num"><b>${k.qty}</b></td><td><b>${esc(k.item)}</b></td><td>${details}</td><td class="num">${hasNum(i.weightKg) ? kg(i.weightKg * k.qty) : ""}</td></tr>${acc}`;
           })
           .join("")
       );
@@ -221,7 +228,7 @@ function printInventory() {
         list
           .map(
             (i) =>
-              `<tr><td>${esc(i.name)}${i.inCase ? ' <span class="muted">(in a case)</span>' : ""}</td><td class="num">${i.qty}${i.service ? ` <span class="warn">(${i.service} out of service)</span>` : ""}</td><td>${i.lengthCm ? `${i.lengthCm}×${i.widthCm}×${i.heightCm} cm` : ""}</td><td class="num">${weightText(i)}</td><td class="num">${hasNum(i.weightKg) ? kg(i.weightKg * i.qty) : ""}</td>${me.money ? `<td class="num">${valueText(i)}</td><td class="num">${hasNum(i.value) ? pMoney(i.value * i.qty) : ""}</td>` : ""}</tr>`,
+              `<tr><td>${esc(i.name)}${i.inCase ? ' <span class="muted">(in a case)</span>' : ""}${i.accessories?.length ? `<br><span class="muted">With: ${i.accessories.map((x) => x.qty + " × " + esc(x.item)).join(", ")}</span>` : ""}${allocated(db.inventory, i.name) ? `<br><span class="muted">${allocated(db.inventory, i.name)} kept as accessories</span>` : ""}</td><td class="num">${i.qty}${i.service ? ` <span class="warn">(${i.service} out of service)</span>` : ""}</td><td>${i.lengthCm ? `${i.lengthCm}×${i.widthCm}×${i.heightCm} cm` : ""}</td><td class="num">${weightText(i)}</td><td class="num">${hasNum(i.weightKg) ? kg(i.weightKg * i.qty) : ""}</td>${me.money ? `<td class="num">${valueText(i)}</td><td class="num">${hasNum(i.value) ? pMoney(i.value * i.qty) : ""}</td>` : ""}</tr>`,
           )
           .join(""),
     )

@@ -137,3 +137,24 @@ test('inventory import from a pasted spreadsheet or CSV (e.g. made with ChatGPT)
   assert.deepEqual(tsv.items, [{name: 'SM58', qty: 6, weightKg: 0.3, inCase: true}, {name: 'Desk case', qty: 1, weightKg: 35, inCase: false, stackable: false}]);
   assert.throws(() => importRows('Foo,Bar\n1,2'), /Equipment/);
 });
+
+import {allocated, shortages, validate as validateState} from '../public/app/stock.js';
+import {sampleState as sample} from './fakes.js';
+test('accessories are set aside from stock, travel with their item and are checked', () => {
+  const s = sample();
+  s.inventory.push({id: 3, name: 'SQ5', qty: 2, service: 0, weightKg: 18, accessories: [{item: 'IEC cable', qty: 1}]}, {id: 4, name: 'IEC cable', qty: 20, service: 0, weightKg: 0.3});
+  validateState(s);
+  assert.equal(allocated(s.inventory, 'IEC cable'), 2, 'two desks keep one IEC each');
+  // A job wanting all 20 IECs is short by 2, because 2 are with the desks.
+  const job = {id: 99, title: 'Cable hire', booking: 'Reserved', start: '2026-08-01T09:00', end: '2026-08-01T18:00', kit: [{item: 'IEC cable', qty: 20}]};
+  assert.deepEqual(shortages(job, s).map((x) => [x.name, x.short]), [['IEC cable', 2]]);
+  assert.equal(shortages({...job, kit: [{item: 'IEC cable', qty: 18}]}, s).length, 0);
+  // The desk's IEC counts towards the van weight.
+  assert.equal(loadCheck({kit: [{item: 'SQ5', qty: 1}]}, s.inventory, []).kg, 18.3);
+  // Checks
+  const bad = (acc, msg) => { const t = structuredClone(s); t.inventory[2].accessories = acc; assert.throws(() => validateState(t), msg); };
+  bad([{item: 'Nope', qty: 1}], /not in the inventory/);
+  bad([{item: 'SQ5', qty: 1}], /its own accessory/);
+  bad([{item: 'IEC cable', qty: 1}, {item: 'IEC cable', qty: 1}], /twice/);
+  bad([{item: 'IEC cable', qty: 11}], /22 set aside as accessories but only 20/);
+});

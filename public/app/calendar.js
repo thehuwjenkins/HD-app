@@ -73,7 +73,7 @@ function calDayPanel(d, list) {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, k]) => {
       const item = db.inventory.find((i) => i.name === name);
-      const owned = item ? item.qty - item.service : 0;
+      const owned = item ? item.qty - item.service - allocated(db.inventory, item.name) : 0;
       const over = k.reserved + k.pending > owned;
       return `<tr><td>${esc(name)}</td><td>${k.reserved}</td><td>${k.pending}</td><td>${owned}</td><td>${over ? `<span class="tag warning">Short ${k.reserved + k.pending - owned}</span>` : '<span class="tag success">OK</span>'}</td></tr>`;
     })

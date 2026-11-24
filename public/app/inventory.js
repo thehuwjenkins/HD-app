@@ -10,7 +10,7 @@ const hasNum = (v) => v !== undefined && v !== null && v !== "" && Number.isFini
 const weightText = (i) => (hasNum(i.weightKg) ? (i.weightEst ? "~" : "") + kg(i.weightKg) : "—");
 const valueText = (i) => (!me.money ? "—" : hasNum(i.value) ? (i.valueEst ? "~" : "") + money(i.value) : "—");
 function equipmentCard(i, add) {
-  return `<div class="equipment-card"><div class="equipment-photo">${equipmentImage(i)}</div><div class="equipment-body"><strong>${esc(i.name)}</strong><div class="muted">${Number(i.qty) || 0} owned · ${weightText(i)} each${me.money ? " · worth " + valueText(i) : ""}</div>${add ? `<button class="btn secondary" type="button" onclick="addKitById(${i.id})">+ Add to job</button>` : `<button class="btn secondary" type="button" onclick="editItem(${i.id})">Edit</button> <button class="btn secondary" onclick="pickEquipmentPhoto(${i.id})">Upload picture</button>`}</div></div>`;
+  return `<div class="equipment-card"><div class="equipment-photo">${equipmentImage(i)}</div><div class="equipment-body"><strong>${esc(i.name)}</strong><div class="muted">${Number(i.qty) || 0} owned${allocated(db.inventory, i.name) ? ` · ${availableToHire(i)} to hire, ${allocated(db.inventory, i.name)} kept as accessories` : ""} · ${weightText(i)} each${me.money ? " · worth " + valueText(i) : ""}</div>${i.accessories?.length ? `<div class="acc-note">With: ${i.accessories.map((a) => `${a.qty} × ${esc(a.item)}`).join(", ")}</div>` : ""}${add ? `<button class="btn secondary" type="button" onclick="addKitById(${i.id})">+ Add to job</button>` : `<button class="btn secondary" type="button" onclick="editItem(${i.id})">Edit</button> <button class="btn secondary" onclick="pickEquipmentPhoto(${i.id})">Upload picture</button>`}</div></div>`;
 }
 function inventory() {
   let matches = db.inventory.filter((i) => i.name.toLowerCase().includes(inventoryQuery.toLowerCase()));
@@ -47,17 +47,43 @@ function inventory() {
 function inventoryResults(matches) {
   return inventoryView === "grid"
     ? `<div class="equipment-grid">${matches.map((i) => equipmentCard(i, false)).join("")}</div>`
-    : `<div class="tablewrap"><table><thead><tr><th>Equipment</th><th>Category</th><th>Owned</th><th>Out of service</th><th>Weight each</th>${me.money ? "<th>Value each</th><th>Total value</th><th>Hire price</th>" : ""}<th></th></tr></thead><tbody>${matches
+    : `<div class="tablewrap"><table><thead><tr><th>Equipment</th><th>Category</th><th>Owned</th><th>Out of service</th><th>To hire</th><th>Weight each</th>${me.money ? "<th>Value each</th><th>Total value</th><th>Hire price</th>" : ""}<th></th></tr></thead><tbody>${matches
         .map(
           (i) =>
-            `<tr><td>${esc(i.name)}</td><td>${esc(i.category || "")}</td><td>${i.qty}</td><td>${i.service}</td><td>${weightText(i)}</td>${me.money ? `<td>${valueText(i)}</td><td>${hasNum(i.value) ? money(i.value * i.qty) : "—"}</td><td>${money(i.price)}</td>` : ""}<td><button class="btn small secondary" onclick="editItem(${i.id})">Edit</button></td></tr>`,
+            `<tr><td>${esc(i.name)}${i.accessories?.length ? `<div class="acc-note">With: ${i.accessories.map((a) => `${a.qty} × ${esc(a.item)}`).join(", ")}</div>` : ""}</td><td>${esc(i.category || "")}</td><td>${i.qty}</td><td>${i.service}</td><td>${availableToHire(i)}${allocated(db.inventory, i.name) ? ` <span class="muted">(${allocated(db.inventory, i.name)} as accessories)</span>` : ""}</td><td>${weightText(i)}</td>${me.money ? `<td>${valueText(i)}</td><td>${hasNum(i.value) ? money(i.value * i.qty) : "—"}</td><td>${money(i.price)}</td>` : ""}<td><button class="btn small secondary" onclick="editItem(${i.id})">Edit</button></td></tr>`,
         )
         .join("")}</tbody></table></div>`;
 }
 // Edit everything about an item in one form.
+// ---------- Accessories (other stock items kept with this one) ----------
+let accDraft = [];
+const availableToHire = (i) => Math.max(0, (Number(i.qty) || 0) - (Number(i.service) || 0) - allocated(db.inventory, i.name));
+function accBox(id) {
+  const self = db.inventory.find((x) => x.id === id);
+  const options = db.inventory.filter((x) => x.id !== id && !accDraft.some((a) => a.item === x.name)).sort((a, b) => a.name.localeCompare(b.name));
+  return `${accDraft
+    .map((a, n) => `<div class="acc-row"><span>${esc(a.item)}</span><input class="field" type="number" min="1" max="100" value="${a.qty}" aria-label="How many ${esc(a.item)} per ${esc(self?.name || "item")}" onchange="setAccQty(${n},this.value,${id})"><button type="button" class="kit-x" onclick="removeAcc(${n},${id})" aria-label="Remove ${esc(a.item)}">×</button></div>`)
+    .join("") || '<p class="hint" style="margin:6px 0">None yet. Add things like its power cable, so they are kept with it and not hired out separately.</p>'}
+    ${options.length ? `<div class="acc-add"><select class="field" id="accPick"><option value="">Choose an item from stock…</option>${options.map((x) => `<option>${esc(x.name)}</option>`).join("")}</select><button type="button" class="btn small secondary" onclick="addAcc(${id})">Add accessory</button></div>` : '<p class="hint">Add the accessory to the inventory first (e.g. "IEC power cable"), then choose it here.</p>'}`;
+}
+function addAcc(id) {
+  const name = $("accPick").value;
+  if (!name) return;
+  accDraft.push({ item: name, qty: 1 });
+  $("accBox").innerHTML = accBox(id);
+}
+function removeAcc(n, id) {
+  accDraft.splice(n, 1);
+  $("accBox").innerHTML = accBox(id);
+}
+function setAccQty(n, v, id) {
+  accDraft[n].qty = Math.min(100, Math.max(1, Math.round(Number(v)) || 1));
+  $("accBox").innerHTML = accBox(id);
+}
 function editItem(id) {
   const i = db.inventory.find((x) => x.id === id);
   if (!i) return;
+  accDraft = (i.accessories || []).map((a) => ({ ...a }));
   const root = document.createElement("div");
   root.className = "modal";
   root.id = "itemDialog";
@@ -72,6 +98,7 @@ function editItem(id) {
       ${me.money ? `${withEst(numField("value", "Value each (£): what it's worth or cost", i.value, "1"), "valueEst", i.valueEst)}${numField("price", "Default hire price per day (£)", i.price, "0.01")}` : ""}
       <div class="wide dims"><span class="muted">Size as it travels, in its case (cm): length × width × height</span><div class="dims-row">${["lengthCm", "widthCm", "heightCm"].map((f, n) => `<input class="field" type="number" min="0" step="0.5" name="${f}" placeholder="${["Length", "Width", "Height"][n]}" aria-label="${["Length", "Width", "Height"][n]} in cm" value="${hasNum(i[f]) ? esc(i[f]) : ""}">`).join("<span>×</span>")}</div>
         <div class="dims-row"><label class="est-line"><input type="checkbox" name="stackable" ${i.stackable === false ? "" : "checked"}> Other things can be stacked on it</label><label class="est-line"><input type="checkbox" name="inCase" ${i.inCase ? "checked" : ""}> Travels inside another case (takes no extra space)</label></div></div>
+      <div class="wide acc-box"><span class="muted">Accessories that always go with it (set aside from stock)</span><div id="accBox">${accBox(id)}</div></div>
       <label class="wide"><span class="muted">Notes (model, serial, where the figures came from)</span><textarea class="field" name="notes" rows="2">${esc(i.notes || "")}</textarea></label>
     </div><div class="toolbar"><button class="btn big" type="submit">Save</button><button type="button" class="btn secondary" onclick="editEquipmentPhoto(${id})">Picture web address</button><button type="button" class="btn danger" onclick="deleteEquipment(${id})">Delete item</button></div></form>`;
   document.body.appendChild(root);
@@ -85,6 +112,8 @@ function saveItem(e, id) {
   const n = (v) => (v === "" || v === undefined ? undefined : Number(v));
   const next = { ...i, name, category: d.category, qty: Number(d.qty) || 0, service: Number(d.service) || 0, weightKg: n(d.weightKg), weightEst: d.weightEst === "on", lengthCm: n(d.lengthCm), widthCm: n(d.widthCm), heightCm: n(d.heightCm), stackable: d.stackable === "on", inCase: d.inCase === "on", notes: d.notes.trim() };
   if (next.stackable) delete next.stackable; // stackable is the default
+  if (accDraft.length) next.accessories = accDraft.map((a) => ({ item: a.item, qty: a.qty }));
+  else delete next.accessories;
   if (!next.inCase) delete next.inCase;
   if (me.money) Object.assign(next, { value: n(d.value), valueEst: d.valueEst === "on", price: Number(d.price) || 0 });
   for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k];
@@ -93,7 +122,11 @@ function saveItem(e, id) {
   } catch (err) {
     return alert(err.message);
   }
-  if (name !== i.name) db.jobs.forEach((j) => (j.kit || []).forEach((k) => k.item === i.name && (k.item = name))); // keep job kit lists linked
+  if (name !== i.name) {
+    // Keep job kit lists and other items' accessories linked to the new name.
+    db.jobs.forEach((j) => (j.kit || []).forEach((k) => k.item === i.name && (k.item = name)));
+    db.inventory.forEach((x) => (x.accessories || []).forEach((a) => a.item === i.name && (a.item = name)));
+  }
   Object.assign(i, next);
   for (const k of Object.keys(i)) if (!(k in next)) delete i[k];
   $("itemDialog")?.remove();
@@ -103,6 +136,8 @@ function saveItem(e, id) {
 function deleteEquipment(id) {
   const i = db.inventory.find((x) => x.id === id);
   if (db.jobs.some((j) => (j.kit || []).some((k) => k.item === i.name))) return alert(i.name + " is on a job's kit list. Remove it from those jobs first.");
+  const usedBy = allocatedTo(db.inventory, i.name);
+  if (usedBy.length) return alert(i.name + " is an accessory of " + usedBy.map((u) => u.main).join(", ") + ". Remove it from there first.");
   if (!confirm("Delete " + i.name + " from the inventory?")) return;
   db.inventory = db.inventory.filter((x) => x.id !== id);
   $("itemDialog")?.remove();
@@ -115,17 +150,18 @@ function exportInventory() {
     const s = String(v ?? "");
     return /[",\n]/.test(s) || /^[=+\-@]/.test(s) ? '"' + (/^[=+\-@]/.test(s) ? "'" : "") + s.replace(/"/g, '""') + '"' : s;
   };
-  const head = ["Equipment", "Category", "Owned", "Out of service", "Length (cm)", "Width (cm)", "Height (cm)", "Weight each (kg)", "Weight estimated", "Total weight (kg)", ...(me.money ? ["Value each (£)", "Value estimated", "Total value (£)", "Hire price per day (£)"] : []), "Notes"];
+  const head = ["Equipment", "Category", "Owned", "Out of service", "Length (cm)", "Width (cm)", "Height (cm)", "Weight each (kg)", "Weight estimated", "Total weight (kg)", ...(me.money ? ["Value each (£)", "Value estimated", "Total value (£)", "Hire price per day (£)"] : []), "Accessories", "Notes"];
   const rows = [...db.inventory]
     .sort((a, b) => (a.category || "").localeCompare(b.category || "") || a.name.localeCompare(b.name))
     .map((i) => [
       i.name, i.category || "", i.qty, i.service, i.lengthCm ?? "", i.widthCm ?? "", i.heightCm ?? "",
       hasNum(i.weightKg) ? i.weightKg : "", i.weightEst ? "Yes" : "", hasNum(i.weightKg) ? Math.round(i.weightKg * i.qty * 10) / 10 : "",
       ...(me.money ? [hasNum(i.value) ? i.value : "", i.valueEst ? "Yes" : "", hasNum(i.value) ? Math.round(i.value * i.qty * 100) / 100 : "", Number(i.price) || 0] : []),
+      (i.accessories || []).map((a) => a.qty + " x " + a.item).join("; "),
       i.notes || "",
     ]);
   const t = inventoryTotals(db.inventory);
-  rows.push([], ["TOTAL", "", t.units, "", "", "", "", "", "", t.weight, ...(me.money ? ["", "", t.value, ""] : []), ""]);
+  rows.push([], ["TOTAL", "", t.units, "", "", "", "", "", "", t.weight, ...(me.money ? ["", "", t.value, ""] : []), "", ""]);
   const csv = "\ufeff" + [head, ...rows].map((r) => r.map(cell).join(",")).join("\r\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
