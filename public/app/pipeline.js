@@ -16,7 +16,7 @@ function pipeline() {
       .join("");
     return `<section class="board-col" data-stage="${st}"><h2>${STAGE_LABELS[st]} <small>${list.length} · ${money(total)}</small></h2>${cards || '<p class="hint">None</p>'}</section>`;
   });
-  return `<div class="toolbar"><button class="btn" onclick="newJob()">+ New job</button><span class="hint">Booked and Out on hire reserve stock. Moving a job to Booked checks for shortages first.</span></div><div class="board">${cols.join("")}</div>`;
+  return `<div class="toolbar">${canWrite("jobs") ? `<button class="btn" onclick="newJob()">+ New job</button>` : ""}<span class="hint">Booked and Out on hire reserve stock. Moving a job to Booked checks for shortages first.</span></div><div class="board">${cols.join("")}</div>`;
 }
 
 // Move a job one stage forward (+1) or back (-1), keeping its stock reservation in step.

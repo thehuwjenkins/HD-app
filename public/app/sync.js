@@ -62,7 +62,8 @@ function save() {
         body: JSON.stringify({ changes: body }),
       });
       if (!res.ok) throw Error((await res.text()).slice(0, 300));
-      const { versions } = await res.json();
+      const { versions, access } = await res.json();
+      if (access) accessSyncResult(access);
       versions.forEach((v, i) => {
         const ch = changes[i];
         if (v.version === null) synced[ch.collection].delete(ch.id);

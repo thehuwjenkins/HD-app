@@ -108,3 +108,18 @@ Then do the restore drill in `RESTORE.md` once.
     - everyone else is refused.
 - **App files:** the files in `public/` are bundled into the worker (`npm run build` writes `src/static.gen.js`) rather than uploaded as static assets. A test fails if the bundle is out of date.
 - **Deploy:** run `npm run deploy`. This builds, tests, then runs `wrangler deploy`.
+
+## People & access (team members and invite-only sign-in)
+
+- Team members are stored in the setting `access` = `{members: [{name, email, sections[]}]}`. Rules live in `src/roles.js`:
+  - collections outside a member's sections are never sent to them;
+  - money fields are stripped unless they have `money`;
+  - changes outside their sections are refused;
+  - hidden prices are put back on save;
+  - only the owner can approve or change approved safety documents.
+- The Cloudflare Access policy "Invited people only (managed by HD Events HQ)" lists:
+  - the owner;
+  - team members;
+  - Staff with an email address.
+
+  The worker updates it after any save that touches Staff or People & access. This needs the worker secret `CF_ACCESS_TOKEN`: an API token with only *Account > Access: Apps and Policies > Edit*. Without it, saves still work, but the page shows that the sign-in list needs updating.

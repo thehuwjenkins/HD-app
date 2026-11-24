@@ -5,6 +5,8 @@ import {storeFile,serveFile,MAX_FILE} from './files.js';
 import {migrate} from './migrate.js';
 import {generateImage} from './ai.js';
 import {crewPage,upgradePage} from './pages.js';
+import {whoIs,describe,visibleState,prepareChanges,checkAccessSetting} from './roles.js';
+import {syncAccess,accessStatus} from './accesssync.js';
 import {STATIC} from './static.gen.js';
 // App code, styles and logo bundled into the worker (see tools/bundle-static.mjs).
 function bundled(path){
@@ -21,9 +23,9 @@ function reply(body,status=200,type='text/plain;charset=utf-8',extra={}){return 
 const json=(value,status=200)=>reply(JSON.stringify(value),status,'application/json');
 const html=body=>reply(body,200,'text/html;charset=utf-8');
 
-// Writes must come from the owner, from this site.
-function writeCheck(req,url,owner,type='application/json'){
-  if(!owner||req.headers.get('origin')!==url.origin)return reply('Forbidden',403);
+// Writes must come from someone allowed to make them, from this site.
+function writeCheck(req,url,allowed,type='application/json'){
+  if(!allowed||req.headers.get('origin')!==url.origin)return reply('Forbidden',403);
   if(type&&!req.headers.get('content-type')?.startsWith(type))return reply(type==='image/'?'Image required':'JSON required',415);
   return null;
 }
@@ -40,8 +42,13 @@ async function guarded(fn){
 
 async function api(req,env,url,email,owner){
   const path=url.pathname,method=req.method;
-  if(!owner)return reply('Forbidden',403);
   const migrated=await isMigrated(env);
+  // Team members may use the data API within their areas; everything else here is the owner's.
+  let who={kind:owner?'owner':'none'};
+  if(!owner&&migrated)who=whoIs(env,email,(await loadState(env)).state);
+  const member=who.kind==='member';
+  if(!owner&&!member)return reply('Forbidden',403);
+  if(member&&!['/api/changes','/api/files','/api/ai/image'].includes(path))return reply('Forbidden',403);
 
   if(method==='POST'&&path==='/api/migrate'){
     const denied=writeCheck(req,url,owner);if(denied)return denied;
@@ -51,24 +58,37 @@ async function api(req,env,url,email,owner){
   if(!migrated)return reply('Storage upgrade needed. Reload the page.',409);
 
   if(method==='POST'&&path==='/api/changes'){
-    const denied=writeCheck(req,url,owner);if(denied)return denied;
+    const denied=writeCheck(req,url,true);if(denied)return denied;
     return guarded(async()=>{
-      const {changes}=await readJson(req,4_000_000);
+      let {changes}=await readJson(req,4_000_000);
+      if(!Array.isArray(changes))return reply('Invalid change list',422);
+      if(member)changes=prepareChanges(changes,(await loadState(env)).state,who);
+      for(const ch of changes)if(ch?.collection==='settings'&&ch.id==='access'&&ch.op==='put'){
+        try{checkAccessSetting(ch.data,env.OWNER_EMAIL);}catch(e){return reply(e.message,422);}
+      }
       const r=await applyChanges(env,email,changes);
-      return json({versions:r.versions});
+      // Adding or removing crew or team members updates who can sign in.
+      let access;
+      if(changes.some(ch=>ch.collection==='staff'||(ch.collection==='settings'&&ch.id==='access')))access=await syncAccess(env,(await loadState(env)).state);
+      return json({versions:r.versions,access});
     });
   }
   if(method==='PUT'&&path==='/api/workspace')return reply('HD Events HQ has been updated. Reload the page; your last change was not saved.',410);
   if(method==='POST'&&path==='/api/files'){
     const type=req.headers.get('content-type')||'';
-    const denied=writeCheck(req,url,owner,'');if(denied)return denied;
+    const denied=writeCheck(req,url,true,'');if(denied)return denied;
     if(Number(req.headers.get('content-length'))>MAX_FILE)return reply('Files must be under 25 MB.',413);
     return guarded(async()=>json({url:await storeFile(env,url.searchParams.get('kind')||'',type.split(';')[0].trim(),await req.arrayBuffer())}));
   }
 
   if(method==='POST'&&path==='/api/ai/image'){
-    const denied=writeCheck(req,url,owner);if(denied)return denied;
+    const denied=writeCheck(req,url,owner||who.sections?.includes('planner'));if(denied)return denied;
     return guarded(async()=>{const {prompt}=await readJson(req,10_000);return json({url:await generateImage(env,prompt)});});
+  }
+  if(method==='GET'&&path==='/api/access/status')return json(await accessStatus(env,(await loadState(env)).state));
+  if(method==='POST'&&path==='/api/access/sync'){
+    const denied=writeCheck(req,url,owner);if(denied)return denied;
+    return json({access:await syncAccess(env,(await loadState(env)).state)});
   }
   if(path.startsWith('/api/safety/')){
     const route=method+' '+path.slice(12);
@@ -99,6 +119,13 @@ async function api(req,env,url,email,owner){
   return reply('Not found',404);
 }
 
+// The full app, with only the data this person may see.
+function ownerPage({state,versions},who){
+  const safe=JSON.stringify({state,versions,me:describe(who)}).replaceAll('<','\\u003c');
+  // Map tile servers (OpenStreetMap) require a referrer; send only the site's origin, never the path.
+  return reply(template.replace('/*BOOTSTRAP*/null',()=>safe),200,'text/html;charset=utf-8',{'referrer-policy':'strict-origin'});
+}
+
 export default {
 async fetch(req,env){
   let email;
@@ -118,14 +145,15 @@ async fetch(req,env){
       if(!legacy)return reply('Workspace setup is incomplete',503);
       return html(upgradePage(counts(legacy.state),!!env.BACKUPS&&!!env.FILES));
     }
-    const {state,versions}=await loadState(env);
-    const safe=JSON.stringify({state,versions}).replaceAll('<','\\u003c');
-    // Map tile servers (OpenStreetMap) require a referrer; send only the site's origin, never the path.
-    return reply(template.replace('/*BOOTSTRAP*/null',()=>safe),200,'text/html;charset=utf-8',{'referrer-policy':'strict-origin'});
+    return ownerPage(await loadState(env),{kind:'owner',email});
+  }
+  if(await isMigrated(env)){
+    const full=await loadState(env),who=whoIs(env,email,full.state);
+    if(who.kind==='member')return ownerPage(visibleState(full.state,full.versions,who),who);
   }
   const state=await currentState(env);
   if(!state)return reply('Workspace setup is incomplete',503);
-  if(!state.staff.some(s=>String(s.email||'').trim().toLowerCase()===email))return reply('Ask Huw to add this email to Staff.',403);
+  if(!state.staff.some(s=>String(s.email||'').trim().toLowerCase()===email))return reply('This email has not been invited to HD Events HQ. Ask Huw to add you.',403);
   return html(crewPage(state,email));
 },
 // Daily backup, set by the cron trigger in wrangler.toml.

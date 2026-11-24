@@ -634,3 +634,4 @@ body { background: var(--bg); }
 .tag.cert { background: #efe8ff; color: #5521b5; }
 .toast { background: #0f1630; border: 0; border-left: 4px solid var(--brand-cyan); }
 .profile-q { border: 0; padding: 0; } .profile-q legend { padding: 0; margin-bottom: 4px; }
+.no-money .money-only { display: none !important; }

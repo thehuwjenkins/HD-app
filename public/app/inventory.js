@@ -18,7 +18,7 @@ function inventory() {
           { name: "name", label: "Equipment name" },
           { name: "qty", label: "Quantity owned", type: "number", min: 0 },
           { name: "service", label: "Out for service", type: "number", min: 0 },
-          { name: "price", label: "Default hire price (£)", type: "number", min: 0, required: false },
+          ...(me.money ? [{ name: "price", label: "Default hire price (£)", type: "number", min: 0, required: false }] : []),
           { name: "photo", label: "Picture URL (optional)", required: false },
         ],
         "addItem",

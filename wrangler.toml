@@ -15,6 +15,11 @@ routes = [{ pattern = "hq.hd-events.co.uk", custom_domain = true }]
 ACCESS_TEAM = "billowing-wind-e033"
 ACCESS_AUD = "5889ce9ce894589605e4a45abfbab3ac96d710a77554b53f828e018cbc3a69b4"
 OWNER_EMAIL = "huw@hd-events.co.uk"
+# Keeps the Cloudflare Access sign-in list in step with People & access and Staff.
+# Also needs the secret CF_ACCESS_TOKEN (Account > Access: Apps and Policies > Edit).
+CF_ACCOUNT_ID = "ae708f09760121c96fb9b209d13a2ef7"
+ACCESS_APP_ID = "b65f695b-f923-4b93-979b-8ff916dc3093"
+ACCESS_POLICY_ID = "c0156aa8-ab04-4eee-b511-7c05ce13a6de"
 
 [[d1_databases]]
 binding = "DB"

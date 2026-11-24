@@ -3,6 +3,11 @@
 const DEFAULT_HD_LOGO = "/logo.png";
 const boot = JSON.parse(document.getElementById("boot").textContent);
 let db = boot.state;
+// Who is signed in and what they may use (set by the server; the server enforces it too).
+const me = boot.me || { role: "owner", owner: true, money: true, sections: [], write: [] };
+const canWrite = (collection) => me.owner || (me.write || []).includes(collection);
+const hasSection = (key) => me.owner || (me.sections || []).includes(key);
+document.documentElement.classList.toggle("no-money", !me.money);
 // Fill in fields that older records may be missing (display defaults only; not saved unless the record is edited).
 db.jobs = (db.jobs || []).map((j) => ({
   ...j,
@@ -31,9 +36,19 @@ let tab = "Overview";
 const navGroups = [
   ["Work", [["Overview"], ["Event Planner"], ["Pipeline"], ["Calendar"], ["Jobs"], ["My Workday"]]],
   ["Resources", [["Inventory"], ["Packages"], ["Cross-hire"], ["Staff"], ["Crew Portal"]]],
-  ["Business", [["CRM"], ["Projects"], ["Branding"]]],
+  ["Business", [["CRM"], ["Projects"], ["Branding"], ["People & access"]]],
 ];
 const tabs = navGroups.flatMap(([, items]) => items);
+// Pages each area unlocks for team members (matches src/roles.js).
+const SECTION_PAGES = {
+  overview: ["Overview"],
+  planner: ["Event Planner"],
+  jobs: ["Pipeline", "Calendar", "Jobs", "Cross-hire"],
+  tasks: ["My Workday", "Projects"],
+  kit: ["Inventory", "Packages", "Cross-hire"],
+  people: ["Staff", "Crew Portal", "CRM"],
+};
+const canSee = (page) => me.owner || (me.sections || []).some((s) => (SECTION_PAGES[s] || []).includes(page));
 const $ = (id) => document.getElementById(id);
 const esc = (x) =>
   String(x ?? "").replace(
@@ -65,11 +80,15 @@ const pages = {
   CRM: ["Customer records, linked jobs and quotes.", () => crm()],
   Projects: ["Business and event development projects.", () => projects()],
   Branding: ["Company details and logo for quotes and job sheets.", () => branding()],
+  "People & access": ["Who can sign in, and which parts of HQ each person can use.", () => peopleAccess()],
 };
 function render() {
   updateBrandMark();
   const shortCount = allShortages().length;
+  if (!canSee(tab)) tab = tabs.map(([n]) => n).find(canSee) || tab;
   $("nav").innerHTML = navGroups
+    .map(([group, items]) => [group, items.filter(([n]) => canSee(n))])
+    .filter(([, items]) => items.length)
     .map(
       ([group, items]) =>
         `<div class="nav-group">${group}</div>` +
@@ -81,7 +100,7 @@ function render() {
           .join(""),
     )
     .join("");
-  const [description, view] = pages[tab] || pages.Overview;
+  const [description, view] = canSee(tab) ? pages[tab] || pages.Overview : ["You don't have access to any areas yet. Ask Huw.", () => ""];
   $("heading").textContent = tab;
   $("description").textContent = description;
   $("content").innerHTML = view();
@@ -92,7 +111,7 @@ function stageTag(job) {
   return `<span class="stage" data-stage="${st}">${STAGE_LABELS[st]}</span>`;
 }
 const cats = ["Audio", "Visual", "Lighting", "Stage & Rigging", "Transport", "Install", "Labour / Crew"];
-const money = (n) => "£" + (Number(n) || 0).toFixed(2);
+const money = (n) => (me.money ? "£" + (Number(n) || 0).toFixed(2) : "—");
 function inputTime(value, end) {
   if (!value) return "";
   if (value.length !== 10) return value;

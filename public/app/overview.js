@@ -35,10 +35,23 @@ function nextAction(f) {
     return [n(f.toInvoice.length, "Invoice 1 returned job", "Invoice # returned jobs"), f.toInvoice.map((j) => esc(j.title)).slice(0, 3).join(", "), "Open pipeline", "go('Pipeline')"];
   if (f.quotes.length)
     return [n(f.quotes.length, "Chase 1 outstanding quote", "Chase # outstanding quotes"), money(f.quotes.reduce((s, j) => s + jobValue(j), 0)) + " waiting on a decision.", "Open pipeline", "go('Pipeline')"];
-  return ["You're all caught up", "Nothing urgent. Add the next enquiry when it comes in.", "New job", "newJob()"];
+  return canWrite("jobs") ? ["You're all caught up", "Nothing urgent. Add the next enquiry when it comes in.", "New job", "newJob()"] : ["You're all caught up", "Nothing urgent right now.", "Event Planner", "go('Event Planner')"];
 }
 
+// Team members without jobs access see their event plans instead of the business dashboard.
+function memberOverview() {
+  const plans = [...db.plans].sort((a, b) => (a.eventDate || "9999").localeCompare(b.eventDate || "9999"));
+  const due = plans
+    .flatMap((p) => p.stages.flatMap((s) => s.items.filter((i) => i.due && i.status !== "done" && i.status !== "na").map((i) => ({ p, i }))))
+    .sort((a, b) => a.i.due.localeCompare(b.i.due))
+    .slice(0, 8);
+  const today = todayKey();
+  return `<div class="toolbar">${hasSection("planner") ? `<button class="btn" onclick="planDialog()">Plan an event</button>` : ""}</div>
+  <div class="cols"><div class="panel"><h2>Your events</h2>${plans.map((p) => row(`<b>${esc(p.title)}</b><div class="muted">${p.eventDate ? fmtDay(p.eventDate, { weekday: "short", day: "numeric", month: "short", year: "numeric" }) : "Date not set"} · ${countdown(p.eventDate)}</div>`, `<button class="btn small secondary" onclick="openPlan(${p.id})">Open</button>`)).join("") || '<p class="empty">No event plans yet.</p>'}</div>
+  <div class="panel"><h2>Coming up on the checklists</h2>${due.map(({ p, i }) => row(`${esc(i.title)}<div class="muted">${esc(p.title)}</div>`, `<span class="tag ${i.due < today ? "warning" : ""}">${i.due < today ? "Overdue · " : ""}${fmtDay(i.due, { day: "numeric", month: "short" })}</span>`)).join("") || '<p class="empty">Nothing due.</p>'}</div></div>`;
+}
 function overview() {
+  if (!me.owner && !hasSection("jobs")) return memberOverview();
   const f = overviewFacts();
   const [title, detail, label, action] = nextAction(f);
   const month = f.today.slice(0, 7);
@@ -51,7 +64,7 @@ function overview() {
       `${stageTag(j)} <button class="btn small secondary" onclick="openJob(${j.id})">Open</button>`,
     );
   return `
-  <div class="toolbar"><button class="btn" onclick="planDialog()">Plan an event</button><button class="btn secondary" onclick="newJob()">+ New job</button></div>
+  <div class="toolbar">${hasSection("planner") ? `<button class="btn" onclick="planDialog()">Plan an event</button>` : ""}${canWrite("jobs") ? `<button class="btn secondary" onclick="newJob()">+ New job</button>` : ""}</div>
   <div class="next-action"><div><span class="muted">Next action</span><b>${title}</b><span class="muted">${detail}</span></div><button class="btn" onclick="${action}">${label}</button></div>
   <div class="stats">
     ${stat("This week", f.week.length, f.week.length ? fmtDay(f.wkFrom, { day: "numeric", month: "short" }) + " – " + fmtDay(f.wkTo, { day: "numeric", month: "short" }) : "No jobs this week", "go('Calendar')")}

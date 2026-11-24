@@ -104,7 +104,7 @@ function planDialog(jobId) {
       <label><span class="muted">Template</span><select class="field" name="template">${Object.entries(PLAN_TEMPLATES).map(([k, t]) => `<option value="${k}">${esc(t.name)}</option>`).join("")}</select></label>
       <fieldset class="wide profile-q"><legend>What's happening at this event? <span class="muted">Tick everything that applies. The checklist adds the licences, certificates and safety documents each one needs.</span></legend>
         <div class="profile-grid">${PLAN_PROFILE.map(([k, l]) => `<label class="check-card"><input type="checkbox" name="pf_${k}"> ${esc(l)}</label>`).join("")}</div></fieldset>
-      <label class="wide"><span class="muted">Job</span><select class="field" name="jobId"><option value="">Create a new job (as an enquiry)</option>${free.map((j) => `<option value="${j.id}" ${j.id === jobId ? "selected" : ""}>${esc(j.title)} · ${esc(fmtRange(j))}</option>`).join("")}</select><span class="hint">The plan is linked to a job, so kit, crew and the pipeline stay in step.</span></label>
+      <label class="wide"><span class="muted">Job</span><select class="field" name="jobId">${canWrite("jobs") ? `<option value="">Create a new job (as an enquiry)</option>` : `<option value="">No linked job</option>`}${free.map((j) => `<option value="${j.id}" ${j.id === jobId ? "selected" : ""}>${esc(j.title)} · ${esc(fmtRange(j))}</option>`).join("")}</select><span class="hint">The plan is linked to a job, so kit, crew and the pipeline stay in step.</span></label>
     </div><button class="btn big" type="submit">Create plan</button></form>`;
   document.body.appendChild(root);
   root.querySelector("input[name=title]").focus();
@@ -114,7 +114,7 @@ function createPlan(e) {
   const d = data(e);
   const profile = Object.fromEntries(PLAN_PROFILE.map(([k]) => [k, d["pf_" + k] === "on"]));
   let jobId = Number(d.jobId) || null;
-  if (!jobId) {
+  if (!jobId && canWrite("jobs")) {
     jobId = uid();
     db.jobs.push({ id: jobId, title: d.title, stage: "enquiry", booking: "Draft", start: d.eventDate || "", end: d.endDate || d.eventDate || "", venue: d.venue, client: "", contact: "", load: "", notes: "", kit: [] });
   }
@@ -160,7 +160,7 @@ function planWorkspace(p) {
   const body = { checklist: planChecklist, site: siteMap, creative: creativeBoard, posters: posterStudio, docs: planDocuments, suppliers: planSuppliers, compliance: planCompliance }[plannerTab] || planChecklist;
   return `<div class="toolbar"><button class="btn small ghost" onclick="plannerId=null;render()">← All plans</button></div>
   <div class="plan-head">${ring(pr.pct, 72)}<div class="grow"><h2>${esc(p.title)}</h2><div class="muted">${p.eventDate ? esc(fmtDay(p.eventDate, { weekday: "long", day: "numeric", month: "long", year: "numeric" })) : "Date not set"}${p.venue ? " · " + esc(p.venue) : ""}${p.capacity ? " · " + p.capacity.toLocaleString("en-GB") + " capacity" : ""}</div>
-  <div class="toolbar" style="margin:8px 0 0">${job ? stageTag(job) + ` <button class="btn small secondary" onclick="openJob(${job.id})">Open job</button>` : ""}<button class="btn small ghost" onclick="editPlanDetails()">Edit details</button><button class="btn small ghost" onclick="profileDialog()">Event profile</button></div></div>
+  <div class="toolbar" style="margin:8px 0 0">${job ? stageTag(job) + (canSee("Jobs") ? ` <button class="btn small secondary" onclick="openJob(${job.id})">Open job</button>` : "") : ""}<button class="btn small ghost" onclick="editPlanDetails()">Edit details</button><button class="btn small ghost" onclick="profileDialog()">Event profile</button></div></div>
   <div class="countdown"><b>${countdown(p.eventDate)}</b><span>${pr.done} of ${pr.total} done · ${approved}/${docs.length} documents approved</span></div></div>
   <div class="tabs" role="tablist">${PLAN_TABS.map(([k, l]) => `<button role="tab" aria-selected="${k === plannerTab}" class="${k === plannerTab ? "active" : ""}" onclick="plannerTab='${k}';render()">${l}</button>`).join("")}</div>
   <div id="planBody">${body(p)}</div>`;
@@ -354,7 +354,7 @@ function planDocuments(p) {
           ok = d.status === "approved";
         return `<div class="panel doc ${ok ? "approved" : "draft"}"><div class="line" style="border:0;padding-top:0"><div><span class="muted">${DOC_LABELS[d.kind]}</span><h2 style="margin:0">${esc(i.title)}</h2></div><span class="tag ${ok ? "success" : "warning"}">${ok ? "✓ Approved by " + esc(d.approval.by) + " · " + hqWhen(d.approval.at) : "Draft: needs review"}</span></div>
         ${ok ? `<pre class="doc-text">${esc(d.content)}</pre>` : `<textarea class="field doc-text" rows="14" onchange="setDocText(${i.id},this.value)" aria-label="${esc(i.title)} text">${esc(d.content || DOC_SKELETONS[d.kind])}</textarea>`}
-        <div class="toolbar" style="margin-top:10px">${ok ? `<button class="btn small secondary" onclick="unapproveDoc(${i.id})">Edit (withdraws approval)</button>` : `<button class="btn small" onclick="approveDoc(${i.id})" ${name ? "" : "disabled"}>✓ Approve as ${esc(name || "…")}</button><button class="btn small ghost" disabled title="Coming next: Claude drafts this from the event details and your past documents">Draft with AI (coming next)</button>`}<button class="btn small secondary" onclick="printDoc(${i.id})">Print / PDF</button></div></div>`;
+        <div class="toolbar" style="margin-top:10px">${!me.owner ? `<span class="hint" style="margin:0">${ok ? "Approved documents can only be changed by Huw." : "Huw approves safety documents."}</span>` : ok ? `<button class="btn small secondary" onclick="unapproveDoc(${i.id})">Edit (withdraws approval)</button>` : `<button class="btn small" onclick="approveDoc(${i.id})" ${name ? "" : "disabled"}>✓ Approve as ${esc(name || "…")}</button><button class="btn small ghost" disabled title="Coming next: Claude drafts this from the event details and your past documents">Draft with AI (coming next)</button>`}<button class="btn small secondary" onclick="printDoc(${i.id})">Print / PDF</button></div></div>`;
       })
       .join("") || '<p class="empty">This plan has no safety documents. Add one from the checklist.</p>') +
     `<div class="toolbar"><button class="btn small secondary" onclick="addDoc()">+ Add a document</button></div>`
