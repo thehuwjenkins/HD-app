@@ -70,6 +70,8 @@ function editItem(id) {
       ${numField("qty", "Quantity owned", i.qty, "1")}${numField("service", "Out for service", i.service, "1")}
       ${withEst(numField("weightKg", "Weight each (kg), as it travels", i.weightKg), "weightEst", i.weightEst)}
       ${me.money ? `${withEst(numField("value", "Value each (£): what it's worth or cost", i.value, "1"), "valueEst", i.valueEst)}${numField("price", "Default hire price per day (£)", i.price, "0.01")}` : ""}
+      <div class="wide dims"><span class="muted">Size as it travels, in its case (cm): length × width × height</span><div class="dims-row">${["lengthCm", "widthCm", "heightCm"].map((f, n) => `<input class="field" type="number" min="0" step="0.5" name="${f}" placeholder="${["Length", "Width", "Height"][n]}" aria-label="${["Length", "Width", "Height"][n]} in cm" value="${hasNum(i[f]) ? esc(i[f]) : ""}">`).join("<span>×</span>")}</div>
+        <div class="dims-row"><label class="est-line"><input type="checkbox" name="stackable" ${i.stackable === false ? "" : "checked"}> Other things can be stacked on it</label><label class="est-line"><input type="checkbox" name="inCase" ${i.inCase ? "checked" : ""}> Travels inside another case (takes no extra space)</label></div></div>
       <label class="wide"><span class="muted">Notes (model, serial, where the figures came from)</span><textarea class="field" name="notes" rows="2">${esc(i.notes || "")}</textarea></label>
     </div><div class="toolbar"><button class="btn big" type="submit">Save</button><button type="button" class="btn secondary" onclick="editEquipmentPhoto(${id})">Picture web address</button><button type="button" class="btn danger" onclick="deleteEquipment(${id})">Delete item</button></div></form>`;
   document.body.appendChild(root);
@@ -81,7 +83,9 @@ function saveItem(e, id) {
   const name = d.name.trim();
   if (db.inventory.some((x) => x.id !== id && x.name.toLowerCase() === name.toLowerCase())) return alert("Another item already has that name.");
   const n = (v) => (v === "" || v === undefined ? undefined : Number(v));
-  const next = { ...i, name, category: d.category, qty: Number(d.qty) || 0, service: Number(d.service) || 0, weightKg: n(d.weightKg), weightEst: d.weightEst === "on", notes: d.notes.trim() };
+  const next = { ...i, name, category: d.category, qty: Number(d.qty) || 0, service: Number(d.service) || 0, weightKg: n(d.weightKg), weightEst: d.weightEst === "on", lengthCm: n(d.lengthCm), widthCm: n(d.widthCm), heightCm: n(d.heightCm), stackable: d.stackable === "on", inCase: d.inCase === "on", notes: d.notes.trim() };
+  if (next.stackable) delete next.stackable; // stackable is the default
+  if (!next.inCase) delete next.inCase;
   if (me.money) Object.assign(next, { value: n(d.value), valueEst: d.valueEst === "on", price: Number(d.price) || 0 });
   for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k];
   try {
@@ -111,17 +115,17 @@ function exportInventory() {
     const s = String(v ?? "");
     return /[",\n]/.test(s) || /^[=+\-@]/.test(s) ? '"' + (/^[=+\-@]/.test(s) ? "'" : "") + s.replace(/"/g, '""') + '"' : s;
   };
-  const head = ["Equipment", "Category", "Owned", "Out of service", "Weight each (kg)", "Weight estimated", "Total weight (kg)", ...(me.money ? ["Value each (£)", "Value estimated", "Total value (£)", "Hire price per day (£)"] : []), "Notes"];
+  const head = ["Equipment", "Category", "Owned", "Out of service", "Length (cm)", "Width (cm)", "Height (cm)", "Weight each (kg)", "Weight estimated", "Total weight (kg)", ...(me.money ? ["Value each (£)", "Value estimated", "Total value (£)", "Hire price per day (£)"] : []), "Notes"];
   const rows = [...db.inventory]
     .sort((a, b) => (a.category || "").localeCompare(b.category || "") || a.name.localeCompare(b.name))
     .map((i) => [
-      i.name, i.category || "", i.qty, i.service,
+      i.name, i.category || "", i.qty, i.service, i.lengthCm ?? "", i.widthCm ?? "", i.heightCm ?? "",
       hasNum(i.weightKg) ? i.weightKg : "", i.weightEst ? "Yes" : "", hasNum(i.weightKg) ? Math.round(i.weightKg * i.qty * 10) / 10 : "",
       ...(me.money ? [hasNum(i.value) ? i.value : "", i.valueEst ? "Yes" : "", hasNum(i.value) ? Math.round(i.value * i.qty * 100) / 100 : "", Number(i.price) || 0] : []),
       i.notes || "",
     ]);
   const t = inventoryTotals(db.inventory);
-  rows.push([], ["TOTAL", "", t.units, "", "", "", t.weight, ...(me.money ? ["", "", t.value, ""] : []), ""]);
+  rows.push([], ["TOTAL", "", t.units, "", "", "", "", "", "", t.weight, ...(me.money ? ["", "", t.value, ""] : []), ""]);
   const csv = "\ufeff" + [head, ...rows].map((r) => r.map(cell).join(",")).join("\r\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -138,15 +142,27 @@ function vehiclesPanel() {
   const list = vehicleList();
   return panel(
     "Vans & trailers",
-    `<p class="hint">Add each vehicle's payload (the most it can carry, from the plate inside the door or the V5C: gross weight minus kerb weight). Jobs then show whether the kit fits.</p>
-    ${list.map((v) => row(`<b>${esc(v.name)}</b>`, `${kg(v.payloadKg)} payload ${me.owner ? `<button class="btn small ghost" onclick="removeVehicle(${v.id})">Remove</button>` : ""}`)).join("") || '<p class="empty">No vehicles yet.</p>'}
-    ${me.owner ? `<form class="toolbar" style="margin-top:12px" onsubmit="addVehicle(event)"><input class="field" style="flex:2;min-width:180px" name="name" required placeholder="e.g. Transit LWB or 2.7t box trailer"><input class="field" style="flex:1;min-width:130px" name="payloadKg" type="number" min="1" required placeholder="Payload kg"><button class="btn">Add vehicle</button></form>` : ""}`,
+    `<p class="hint">Payload is the most it can carry: gross weight minus kerb weight, from the plate inside the door or the V5C. Load space is measured inside, floor to roof, bulkhead to rear doors.</p>
+    ${list.map((v) => row(`<b>${esc(v.name)}</b><div class="muted">${v.lengthCm ? `Load space ${v.lengthCm} × ${v.widthCm} × ${v.heightCm} cm` : "Load space size not set"}</div>`, `${kg(v.payloadKg)} payload ${me.owner ? `<button class="btn small secondary" onclick="editVehicle(${v.id})">Edit</button> <button class="btn small ghost" onclick="removeVehicle(${v.id})">Remove</button>` : ""}`)).join("") || '<p class="empty">No vehicles yet.</p>'}
+    ${me.owner ? `<form class="vehicle-form" onsubmit="addVehicle(event)"><input class="field" name="name" required placeholder="e.g. Transit LWB or 2.7t box trailer"><input class="field" name="payloadKg" type="number" min="1" required placeholder="Payload kg"><input class="field" name="lengthCm" type="number" min="1" placeholder="Load length cm"><input class="field" name="widthCm" type="number" min="1" placeholder="Width cm"><input class="field" name="heightCm" type="number" min="1" placeholder="Height cm"><button class="btn">Add vehicle</button></form>` : ""}`,
   );
 }
 function addVehicle(e) {
   e.preventDefault();
   const d = data(e);
-  db.vehicles = [...vehicleList(), { id: uid(), name: d.name.trim(), payloadKg: Number(d.payloadKg) }];
+  db.vehicles = [...vehicleList(), { id: uid(), name: d.name.trim(), payloadKg: Number(d.payloadKg), ...(d.lengthCm && d.widthCm && d.heightCm ? { lengthCm: Number(d.lengthCm), widthCm: Number(d.widthCm), heightCm: Number(d.heightCm) } : {}) }];
+  save();
+  render();
+}
+function editVehicle(id) {
+  const v = vehicleList().find((x) => x.id === id);
+  const payload = prompt("Payload for " + v.name + " (kg)", v.payloadKg ?? "");
+  if (payload === null) return;
+  const size = prompt("Load space inside, in cm: length x width x height (e.g. 335 x 175 x 175)", v.lengthCm ? `${v.lengthCm} x ${v.widthCm} x ${v.heightCm}` : "");
+  if (size === null) return;
+  const dims = size.split(/[x×*, ]+/i).map(Number).filter((n) => n > 0);
+  if (size.trim() && dims.length !== 3) return alert("Enter three numbers, e.g. 335 x 175 x 175");
+  db.vehicles = vehicleList().map((x) => (x.id === id ? { ...x, payloadKg: Number(payload) || x.payloadKg, ...(dims.length === 3 ? { lengthCm: dims[0], widthCm: dims[1], heightCm: dims[2] } : {}) } : x));
   save();
   render();
 }

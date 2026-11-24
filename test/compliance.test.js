@@ -84,3 +84,42 @@ test('van load check', () => {
   assert.equal(loadCheck({...job, vehicleIds: [1, 2]}, inv, vans).over, false);
   assert.equal(loadCheck({...job, vehicleIds: []}, inv, vans).pct, null);
 });
+
+import {packVehicle, planLoad} from '../public/app/stock.js';
+test('van packing: everything fits, nothing overlaps, floats or sits on non-stackable kit', () => {
+  const inv = [
+    {name: 'PS10 case', lengthCm: 60, widthCm: 45, heightCm: 75, weightKg: 30},
+    {name: 'Sub', lengthCm: 80, widthCm: 60, heightCm: 70, weightKg: 55},
+    {name: 'Cable trunk', lengthCm: 60, widthCm: 40, heightCm: 40, weightKg: 20},
+    {name: 'Desk', lengthCm: 120, widthCm: 80, heightCm: 30, weightKg: 35, stackable: false},
+    {name: 'SM58', inCase: true}, {name: 'No size'},
+  ];
+  const kit = [{item: 'PS10 case', qty: 4}, {item: 'Sub', qty: 2}, {item: 'Cable trunk', qty: 20}, {item: 'Desk', qty: 1}, {item: 'SM58', qty: 6}, {item: 'No size', qty: 2}];
+  const van = {name: 'Transit', lengthCm: 335, widthCm: 175, heightCm: 175, payloadKg: 1100};
+  const r = planLoad(kit, inv, [van]);
+  const p = r.loads[0].placed;
+  assert.equal(p.length, 27);
+  assert.deepEqual(r.left, []);
+  assert.deepEqual(r.noSize, [{name: 'No size', qty: 2}]);
+  assert.deepEqual(r.inside, [{name: 'SM58', qty: 6}]);
+  const ov = (a0, a1, b0, b1) => a0 < b1 && b0 < a1;
+  for (const a of p) {
+    assert.ok(a.x >= 0 && a.y >= 0 && a.z >= 0 && a.x + a.l <= 335 && a.y + a.w <= 175 && a.z + a.h <= 175, 'inside the van');
+    for (const b of p) if (a !== b) assert.ok(!(ov(a.x, a.x + a.l, b.x, b.x + b.l) && ov(a.y, a.y + a.w, b.y, b.y + b.w) && ov(a.z, a.z + a.h, b.z, b.z + b.h)), 'no overlap');
+    if (a.z > 0) {
+      const under = p.filter((b) => b.z + b.h === a.z && ov(a.x, a.x + a.l, b.x, b.x + b.l) && ov(a.y, a.y + a.w, b.y, b.y + b.w));
+      assert.ok(under.length && under.every((b) => b.stackable), a.name + ' sits on stackable kit');
+    }
+  }
+  assert.equal(r.loads[0].kg, 4 * 30 + 2 * 55 + 20 * 20 + 35);
+});
+test('van packing: overflow moves to the next vehicle, and too-big items are reported', () => {
+  const inv = [{name: 'Crate', lengthCm: 100, widthCm: 100, heightCm: 100, weightKg: 50}, {name: 'Truss 3m', lengthCm: 300, widthCm: 30, heightCm: 30, weightKg: 12}];
+  const small = {name: 'Small van', lengthCm: 200, widthCm: 120, heightCm: 120, payloadKg: 800};
+  const trailer = {name: 'Trailer', lengthCm: 250, widthCm: 130, heightCm: 110, payloadKg: 500};
+  const r = planLoad([{item: 'Crate', qty: 4}, {item: 'Truss 3m', qty: 1}], inv, [small, trailer]);
+  assert.equal(r.loads[0].placed.length, 2);
+  assert.equal(r.loads[1].placed.length, 2);
+  assert.deepEqual(r.left.map((b) => b.name), ['Truss 3m']);
+  assert.match(packVehicle([], {name: 'X'}).error, /No load space size/);
+});

@@ -102,7 +102,7 @@ export function validate(state) {
     if(typeof item.name!=='string'||!item.name.trim()||names.has(item.name.toLowerCase())) throw Error('Equipment needs a unique name');
     names.add(item.name.toLowerCase());
     if(!Number.isSafeInteger(item.qty)||!Number.isSafeInteger(item.service)||item.service<0||item.qty<item.service) throw Error('Invalid stock count');
-    for(const [f,max] of [['weightKg',5000],['value',1000000],['price',1000000]])
+    for(const [f,max] of [['weightKg',5000],['value',1000000],['price',1000000],['lengthCm',2000],['widthCm',2000],['heightCm',2000]])
       if(item[f]!==undefined&&item[f]!==''&&item[f]!==null&&!(Number(item[f])>=0&&Number(item[f])<=max))throw Error(item.name+' — '+(f==='weightKg'?'weight':f)+' must be a number from 0 to '+max);
   }
   for(const job of state.jobs){
@@ -181,5 +181,71 @@ export function loadCheck(job,inventory=[],vehicles=[]){
   kg=Math.round(kg*10)/10;
   return {kg,unknown,payload,vehicles:chosen.map(v=>v.name),pct:payload?Math.round(kg/payload*100):null,over:payload>0&&kg>payload};
 }
+// ---------- Van load planner (3D packing) ----------
+// Packs a job's kit into a vehicle's load space. Boxes stay upright (they may turn 90° on the floor),
+// load from the cab end, biggest and heaviest first, and every box must sit on the floor or on
+// stackable boxes covering most of its base. A planning aid: wheel arches and odd shapes are not modelled.
+// Units: cm and kg. x = length from the bulkhead, y = across, z = up.
+export function loadItems(kit=[],inventory=[]){
+  const byName=new Map(inventory.map(i=>[i.name,i]));
+  const boxes=[],noSize=[],inside=[];
+  for(const line of kit){
+    const i=byName.get(line.item)||{},qty=Number(line.qty)||0;
+    if(i.inCase){inside.push({name:line.item,qty});continue;}
+    const l=num(i.lengthCm),w=num(i.widthCm),h=num(i.heightCm);
+    if(!(l>0&&w>0&&h>0)){if(qty)noSize.push({name:line.item,qty});continue;}
+    for(let n=0;n<qty;n++)boxes.push({name:line.item,l,w,h,kg:num(i.weightKg)||0,stackable:i.stackable!==false});
+  }
+  return {boxes,noSize,inside};
+}
+const overlap1=(a0,a1,b0,b1)=>a0<b1-0.01&&b0<a1-0.01;
+export function packVehicle(boxes,v,{support=0.75}={}){
+  const L=num(v.lengthCm),W=num(v.widthCm),H=num(v.heightCm);
+  const placed=[],left=[];
+  if(!(L>0&&W>0&&H>0))return {placed,left:boxes.slice(),error:'No load space size for '+v.name};
+  // Stackable kit first (biggest, then heaviest), so nothing fragile ends up underneath; non-stackable items go on last.
+  const order=boxes.map((b,i)=>({...b,i})).sort((a,b)=>(a.stackable===b.stackable?0:a.stackable?-1:1)||(b.l*b.w*b.h)-(a.l*a.w*a.h)||b.kg-a.kg);
+  let points=[[0,0,0]];
+  for(const b of order){
+    let best=null;
+    for(const [x,y,z] of points){
+      for(const [l,w] of b.l===b.w?[[b.l,b.w]]:[[b.l,b.w],[b.w,b.l]]){
+        if(x+l>L+0.01||y+w>W+0.01||z+b.h>H+0.01)continue;
+        if(best&&(x>best.x||(x===best.x&&(z>best.z||(z===best.z&&y>=best.y)))))continue;
+        let clash=false;
+        for(const p of placed)if(overlap1(x,x+l,p.x,p.x+p.l)&&overlap1(y,y+w,p.y,p.y+p.w)&&overlap1(z,z+b.h,p.z,p.z+p.h)){clash=true;break;}
+        if(clash)continue;
+        if(z>0){
+          let area=0,ok=true;
+          for(const p of placed){
+            if(Math.abs(p.z+p.h-z)>0.01)continue;
+            const ox=Math.min(x+l,p.x+p.l)-Math.max(x,p.x),oy=Math.min(y+w,p.y+p.w)-Math.max(y,p.y);
+            if(ox>0&&oy>0){if(!p.stackable){ok=false;break;}area+=ox*oy;}
+          }
+          if(!ok||area<support*l*w)continue;
+        }
+        best={x,y,z,l,w};
+      }
+    }
+    if(!best){left.push(b);continue;}
+    const p={name:b.name,x:best.x,y:best.y,z:best.z,l:best.l,w:best.w,h:b.h,kg:b.kg,stackable:b.stackable};
+    placed.push(p);
+    points.push([p.x+p.l,p.y,p.z],[p.x,p.y+p.w,p.z],[p.x,p.y,p.z+p.h]);
+    const seen=new Set();
+    points=points.filter(([x,y,z])=>{const k=x+','+y+','+z;if(seen.has(k))return false;seen.add(k);
+      return !placed.some(q=>x>=q.x-0.01&&x<q.x+q.l-0.01&&y>=q.y-0.01&&y<q.y+q.w-0.01&&z>=q.z-0.01&&z<q.z+q.h-0.01);})
+      .sort((a,b)=>a[0]-b[0]||a[2]-b[2]||a[1]-b[1]);
+  }
+  const vol=placed.reduce((s,p)=>s+p.l*p.w*p.h,0),kg=placed.reduce((s,p)=>s+p.kg,0);
+  return {placed,left,volumePct:Math.round(vol/(L*W*H)*100),kg:Math.round(kg*10)/10,payload:num(v.payloadKg)||0,over:!!num(v.payloadKg)&&kg>num(v.payloadKg),
+    lengthUsed:placed.reduce((m,p)=>Math.max(m,p.x+p.l),0)};
+}
+// Fill the chosen vehicles in order; whatever does not fit in one goes on to the next.
+export function planLoad(kit,inventory,vehicles){
+  const {boxes,noSize,inside}=loadItems(kit,inventory);
+  let rest=boxes;const loads=[];
+  for(const v of vehicles){const r=packVehicle(rest,v);loads.push({vehicle:v,...r});rest=r.left;}
+  return {loads,left:rest,noSize,inside,boxes:boxes.length};
+}
 // Shared with the browser: the owner page loads this file as a module and uses the same checks.
-if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, inventoryTotals, loadCheck, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});
+if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, inventoryTotals, loadCheck, loadItems, packVehicle, planLoad, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});
