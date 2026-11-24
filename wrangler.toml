@@ -1,0 +1,39 @@
+# HD Events HQ: live Cloudflare config.
+name = "hd-events-hq"
+main = "src/worker.js"
+compatibility_date = "2025-10-01"
+account_id = "ae708f09760121c96fb9b209d13a2ef7"
+workers_dev = false
+
+# The app lives at hq.hd-events.co.uk, behind Cloudflare Access (Zero Trust) sign-in.
+routes = [{ pattern = "hq.hd-events.co.uk", custom_domain = true }]
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
+
+[vars]
+ACCESS_TEAM = "SET-AFTER-ZERO-TRUST"
+ACCESS_AUD = "SET-AFTER-ZERO-TRUST"
+OWNER_EMAIL = "huw@hd-events.co.uk"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hd-hq"
+database_id = "6a46a2e6-84d6-4b06-a4d3-e10462a82a83"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "BACKUPS"
+bucket_name = "hd-events-hq-backups"
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "hd-events-hq-files"
+
+[ai]
+binding = "AI"
+
+[triggers]
+crons = ["17 2 * * *"]
