@@ -737,3 +737,4 @@ body { background: var(--bg); }
 .stock-line .avail { color: #0f6138; }
 .stock-line .avail.none { color: #b42318; }
 .stock-line .out-now { color: #8a4500; font-weight: 600; }
+.late-panel { border-color: #f0a59a; background: linear-gradient(160deg, #fff6f4, #fff); } .panel h3 { margin: 12px 0 2px; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
