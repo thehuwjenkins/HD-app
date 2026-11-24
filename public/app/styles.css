@@ -717,3 +717,15 @@ body { background: var(--bg); }
 .accepted-line { font-size: 13px; color: #0f6138; margin-top: 6px; }
 .accepted-line.muted { color: var(--muted); }
 .col-link { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-decoration: underline; text-decoration-color: #c9b6f7; text-underline-offset: 4px; } .board-card .tag { align-self: flex-start; margin-top: 4px; }
+.book-dialog { max-width: 860px; margin: auto; }
+.book-table { width: 100%; border-collapse: collapse; margin: 8px 0 14px; }
+.book-table th, .book-table td { padding: 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
+.book-table th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.book-table .num { text-align: right; }
+.book-table input[type=checkbox] { width: 24px; height: 24px; accent-color: #6d35e8; }
+.book-table .book-qty { max-width: 90px; min-height: 44px; }
+.book-table .book-cond { min-height: 44px; max-width: 140px; }
+.book-table .book-note { margin-top: 6px; min-height: 40px; }
+.book-all { display: flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--text); cursor: pointer; }
+.book-history { margin-top: 10px; font-size: 14px; }
+@media (max-width: 700px) { .book-table th:nth-child(3), .book-table td:nth-child(3), .book-table th:nth-child(4), .book-table td:nth-child(4) { display: none; } }

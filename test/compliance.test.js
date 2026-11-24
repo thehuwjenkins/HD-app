@@ -182,3 +182,27 @@ test('kept-together packages: contents set aside, one booking at a time', () => 
   const t = structuredClone(s); t.packages[0].items[0].qty = 21;
   assert.throws(() => validateState(t), /21 kept together in packages but only 20/);
 });
+
+import {pickItems, outstandingQty} from '../public/app/stock.js';
+test('booking out and in: what to pick, and kit not back yet stays unavailable', () => {
+  const s = sample();
+  s.inventory.push({id: 6, name: 'IEC cable', qty: 10, service: 0});
+  const gig = {id: 50, title: 'Gig', booking: 'Reserved', stage: 'out', start: '2026-09-01T09:00', end: '2026-09-02T18:00',
+    kit: [{item: 'IEC cable', qty: 6}, {item: 'Engineer', qty: 1, category: 'Labour / Crew', external: true}, {item: 'Delivery', qty: 1, category: 'Transport', external: true}],
+    movements: [{at: 'x', dir: 'out', item: 'IEC cable', qty: 6}, {at: 'y', dir: 'in', item: 'IEC cable', qty: 4}]};
+  s.jobs.push(gig);
+  validateState(s);
+  assert.deepEqual(pickItems(gig, s.inventory), [{item: 'IEC cable', need: 6}], 'no crew or delivery on the pick');
+  assert.equal(outstandingQty(gig, 'IEC cable'), 2);
+  // A week later, 2 are still out, so only 8 can go on another job.
+  const later = {id: 51, title: 'Later', booking: 'Reserved', start: '2026-09-09T09:00', end: '2026-09-09T18:00', kit: [{item: 'IEC cable', qty: 9}]};
+  assert.deepEqual(shortages(later, s).map((x) => [x.short, x.conflicts]), [[1, ['Gig']]]);
+  // Even after the job is marked returned with them missing.
+  s.jobs[s.jobs.length - 1] = {...gig, stage: 'returned', booking: 'Returned'};
+  assert.equal(shortages(later, s)[0].short, 1);
+  // Once they're booked back in, all 10 are free again.
+  s.jobs[s.jobs.length - 1].movements.push({at: 'z', dir: 'in', item: 'IEC cable', qty: 2});
+  assert.equal(shortages({...later, kit: [{item: 'IEC cable', qty: 10}]}, s).length, 0);
+  const bad = structuredClone(s); bad.jobs.at(-1).movements.push({at: 'w', dir: 'in', item: 'IEC cable', qty: 1});
+  assert.throws(() => validateState(bad), /more IEC cable booked in than were booked out/);
+});

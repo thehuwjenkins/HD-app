@@ -25,6 +25,9 @@ function overviewFacts() {
 // The single most useful thing to do next.
 function nextAction(f) {
   const n = (x, one, many) => (x === 1 ? one : many.replace("#", x));
+  const overdue = overdueReturns();
+  if (overdue.length)
+    return [`${overdue[0].p.still} item${overdue[0].p.still > 1 ? "s" : ""} not booked back in from ${esc(overdue[0].j.title)}`, `${overdue.length > 1 ? overdue.length - 1 + " more job(s) also have kit out. " : ""}They count as out until they're booked in.`, "Book in", `openBooking(${overdue[0].j.id},'in')`];
   const accepted = db.jobs.filter((j) => j.acceptedAt && stageOf(j) === "quote");
   if (accepted.length)
     return [`${esc(accepted[0].acceptedBy || "The client")} accepted the quote for ${esc(accepted[0].title)}`, esc(accepted[0].needsBooking || "It needs booking."), "Book it", `acceptJob(${accepted[0].id})`];

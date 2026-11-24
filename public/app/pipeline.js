@@ -10,7 +10,7 @@ function pipeline() {
       .map((j) => {
         const issues = st === "invoiced" || st === "returned" ? [] : jobShortages(j);
         const late = st === "booked" && (jobDays(j)?.[0] || "9") < today;
-        return `<div class="board-card"><b>${esc(j.title)}</b><span class="muted">${esc(j.client || "No client")}</span><span class="muted">${esc(fmtRange(j))}</span><span class="muted">${money(jobValue(j))}</span>${issues.length ? `<span class="tag warning">${issues.length} shortage(s)</span>` : ""}${late ? '<span class="tag warning">Start date passed</span>' : ""}${jobStatusTags(j)}
+        return `<div class="board-card"><b>${esc(j.title)}</b><span class="muted">${esc(j.client || "No client")}</span><span class="muted">${esc(fmtRange(j))}</span><span class="muted">${money(jobValue(j))}</span>${issues.length ? `<span class="tag warning">${issues.length} shortage(s)</span>` : ""}${late ? '<span class="tag warning">Start date passed</span>' : ""}${jobStatusTags(j)}${bookingTag(j)}
         <div class="moves"><button class="btn small ghost" ${i === 0 ? "disabled" : ""} onclick="moveStage(${j.id},-1)" aria-label="Move ${esc(j.title)} back to ${i ? STAGE_LABELS[STAGES[i - 1]] : ""}">←</button><button class="btn small secondary" onclick="openJob(${j.id})">Open</button><button class="btn small ghost" ${i === STAGES.length - 1 ? "disabled" : ""} onclick="moveStage(${j.id},1)" aria-label="Move ${esc(j.title)} on to ${STAGE_LABELS[STAGES[i + 1]] || ""}">→</button></div></div>`;
       })
       .join("");
@@ -96,9 +96,9 @@ function nextActions(j) {
     {
       enquiry: (canMoney ? b("Send quote", `sendToClient(${j.id},'quote')`) : "") + b("Mark quote as sent", `moveTo(${j.id},'quote')`, canMoney ? "secondary" : ""),
       quote: b("Mark as accepted", `acceptJob(${j.id})`) + (canMoney ? b("Resend quote", `sendToClient(${j.id},'quote')`, "secondary") : ""),
-      booked: b("Print picking list", `printJob(${j.id})`) + (owner ? b("Send invoice", `sendToClient(${j.id},'invoice')`, "secondary") : "") + b("Mark as hired out", `moveTo(${j.id},'out')`, "secondary"),
-      out: b("Mark as returned", `moveTo(${j.id},'returned')`) + b("Picking list", `printJob(${j.id})`, "secondary"),
-      returned: (owner ? b("Send invoice", `sendToClient(${j.id},'invoice')`) : "") + b("Mark as invoiced", `moveTo(${j.id},'invoiced')`, owner ? "secondary" : ""),
+      booked: b("Print picking list", `printJob(${j.id})`) + b("Book out", `openBooking(${j.id},'out')`) + (owner ? b("Send invoice", `sendToClient(${j.id},'invoice')`, "secondary") : ""),
+      out: b("Book in", `openBooking(${j.id},'in')`) + b("Book out the rest", `openBooking(${j.id},'out')`, "secondary"),
+      returned: (bookingProgress(j)?.still ? b("Book in missing kit", `openBooking(${j.id},'in')`, "secondary") : "") + (owner ? b("Send invoice", `sendToClient(${j.id},'invoice')`) : "") + b("Mark as invoiced", `moveTo(${j.id},'invoiced')`, owner ? "secondary" : ""),
       invoiced: "",
     }[st] || ""
   );

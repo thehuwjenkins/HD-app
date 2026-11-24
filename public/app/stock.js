@@ -33,6 +33,26 @@ export function setAside(state,name){
   for(const p of state.packages||[])if(p.keepTogether)for(const k of p.items||[]){const i=(state.inventory||[]).find(x=>String(x.id)===String(k.id));if(i&&i.name===name)n+=Number(k.qty)||0;}
   return n;
 }
+// ---------- Booking kit out and in ----------
+// What gets picked for a job: every stock or hired-in item, not crew or services like delivery.
+export function pickItems(job,inventory=[]){
+  const inv=new Set(inventory.map(i=>i.name)),m=new Map();
+  for(const k of job.kit||[]){
+    if(k.category==='Labour / Crew')continue;
+    if(!inv.has(k.item)&&['Transport','Install'].includes(k.category))continue;
+    m.set(k.item,(m.get(k.item)||0)+(Number(k.qty)||0));
+  }
+  // Anything still out but no longer on the kit list stays listed until it's back.
+  for(const [item,t] of Object.entries(movementTotals(job)))if(!m.has(item)&&t.out>t.in)m.set(item,0);
+  return [...m].map(([item,need])=>({item,need}));
+}
+// Totals booked out and in, per item, from the job's movement log.
+export function movementTotals(job){
+  const t={};
+  for(const mv of job.movements||[]){const x=t[mv.item]??={out:0,in:0};x[mv.dir]+=Number(mv.qty)||0;}
+  return t;
+}
+export function outstandingQty(job,item){const x=movementTotals(job)[item];return x?Math.max(0,x.out-x.in):0;}
 export function shortages(job, state) {
   const [start,end] = bounds(job);
   const issues = [];
@@ -49,8 +69,14 @@ export function shortages(job, state) {
   for (const [name, quantity] of needed) {
     const item = state.inventory.find(i=>i.name===name);
     const owned = item ? item.qty-item.service-setAside(state,name) : 0;
-    const other = state.jobs.filter(j=>j.id!==job.id && j.booking==='Reserved')
-      .map(j=>({title:j.title,time:bounds(j),qty:j.kit.filter(k=>!k.external && !k.kept && k.item===name).reduce((n,k)=>n+k.qty,0)}))
+    const other = state.jobs.filter(j=>j.id!==job.id && (j.booking==='Reserved'||outstandingQty(j,name)>0))
+      .flatMap(j=>{
+        // During the job's dates it needs what's on its kit list. Kit booked out and not yet booked
+        // back in stays out after that, whatever the return date said.
+        const out=outstandingQty(j,name),t=bounds(j);
+        const planned=j.booking==='Reserved'?j.kit.filter(k=>!k.external && !k.kept && k.item===name).reduce((n,k)=>n+k.qty,0):0;
+        return [{title:j.title,time:t,qty:Math.max(out,planned)},...(out?[{title:j.title,time:[t[1],Infinity],qty:out}]:[])];
+      })
       .filter(j=>j.qty && j.time[0]<end && j.time[1]>start);
     let peak = quantity, conflicts = [];
     for(const time of new Set([start,...other.map(j=>Math.max(start,j.time[0]))])) {
@@ -144,6 +170,11 @@ export function validate(state) {
     if(kept>item.qty-item.service)throw Error(item.name+' — '+kept+' kept together in packages but only '+(item.qty-item.service)+' in service');
   }
   for(const job of state.jobs){
+    if(job.movements!==undefined){
+      if(!Array.isArray(job.movements))throw Error(String(job.title)+' — invalid booking out / in log');
+      for(const mv of job.movements)if(!mv||typeof mv.item!=='string'||!['out','in'].includes(mv.dir)||!Number.isSafeInteger(mv.qty)||mv.qty<1)throw Error(String(job.title)+' — invalid booking out / in entry');
+      for(const [item,t] of Object.entries(movementTotals(job)))if(t.in>t.out)throw Error(String(job.title)+' — more '+item+' booked in than were booked out');
+    }
     if(!['Draft','Reserved','Returned'].includes(job.booking)||!Array.isArray(job.kit)) throw Error('Invalid booking');
     if(job.stage!==undefined&&(!STAGES.includes(job.stage)||STAGE_BOOKING[job.stage]!==job.booking)) throw Error(String(job.title)+' — stage and stock reservation do not match');
     for(const line of job.kit) if(!Number.isSafeInteger(line.qty)||line.qty<1||typeof line.item!=='string')throw Error('Invalid equipment line');
@@ -348,4 +379,4 @@ export function quoteSummary(job,{vatRegistered=false}={}){
 // Next invoice number: HD-1001, HD-1002, … (one higher than any used so far).
 export function nextInvoiceNo(jobs=[]){return 'HD-'+(jobs.reduce((m,j)=>Math.max(m,Number(String(j.invoiceNo||'').replace(/\D/g,''))||0),1000)+1);}
 // Shared with the browser: the owner page loads this file as a module and uses the same checks.
-if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, setAside, allocated, allocatedTo, lineAmount, quoteSummary, nextInvoiceNo, QUOTE_SECTIONS, inventoryTotals, loadCheck, parseTable, importRows, loadItems, packVehicle, planLoad, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});
+if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, pickItems, movementTotals, outstandingQty, setAside, allocated, allocatedTo, lineAmount, quoteSummary, nextInvoiceNo, QUOTE_SECTIONS, inventoryTotals, loadCheck, parseTable, importRows, loadItems, packVehicle, planLoad, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});
