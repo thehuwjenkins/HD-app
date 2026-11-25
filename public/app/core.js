@@ -130,7 +130,7 @@ function guessCategory(name) {
   if (/distro|distribution|16a|32a|63a|125a|ceeform|powercon|iec|extension|cable drum|generator|power/.test(n)) return "Power Distribution";
   if (/rigging|truss|stage|hoist|chain|motor/.test(n)) return "Stage & Rigging";
   if (/light|par |moving head|dimmer|dmx|spotlight/.test(n)) return "Lighting";
-  if (/led wall|projector|screen|camera|video|hdmi|vision/.test(n)) return "Visual";
+  if (/led wall|projector|screen|camera|video|hdmi|vision|\btv\b|monitor|display/.test(n)) return "Visual";
   if (/crew|engineer|technician|operator|rigger|freelancer/.test(n)) return "Labour / Crew";
   if (/install|mount|bracket|fixing/.test(n)) return "Install";
   return "Audio";

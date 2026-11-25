@@ -11,19 +11,46 @@ function kitLine(k, n) {
 }
 // Packages show as one line (with their total) that opens to show and edit what's inside.
 const pkgOpen = new Set();
+// "This job" in department sections (Audio, Visual, Lighting…), each with its count and subtotal.
+// Accessories stay under their main item; packages get their own section; crew go under Crew.
 function kitRows() {
-  if (!draftKit.length) return '<p class="hint">Search and add equipment below, add a package, or add crew.</p>';
-  const done = new Set();
-  return draftKit
-    .map((k, n) => {
-      if (!k.pkg) return kitLine(k, n);
-      if (done.has(k.pkg)) return "";
-      done.add(k.pkg);
-      const lines = draftKit.map((x, i) => [x, i]).filter(([x]) => x.pkg === k.pkg);
-      const units = lines.reduce((s, [x]) => s + (Number(x.qty) || 0), 0);
-      return `<details class="pkg-line" ${pkgOpen.has(k.pkg) ? "open" : ""} ontoggle="this.open ? pkgOpen.add(${k.pkg}) : pkgOpen.delete(${k.pkg})"><summary><div><b>${esc(k.package)}</b><span class="muted">Package · ${units} item${units === 1 ? "" : "s"} · tap to see what's in it</span></div><b class="kit-line-total money-only">${money(lines.reduce((s, [x]) => s + lineTotal(x), 0))}</b><button class="kit-x" type="button" onclick="event.preventDefault();removePackageFromJob(${k.pkg})" aria-label="Remove ${esc(k.package)}">×</button></summary>${lines.map(([x, i]) => kitLine(x, i)).join("")}</details>`;
-    })
-    .join("");
+  if (!draftKit.length) return '<p class="hint">Add equipment from the list, add a package, or add crew. Items are sorted into their department here.</p>';
+  const rows = draftKit.map((k, n) => [k, n]);
+  const isMain = (k) => !k.accessoryOf || !draftKit.some((m) => m.item === k.accessoryOf && !m.accessoryOf && !m.pkg);
+  const accOf = (k) => rows.filter(([x]) => x.accessoryOf === k.item && !x.pkg && !isMain(x));
+  const dept = (k) => (isCrewLine(k) ? "Crew" : k.category || "Audio");
+  const groups = new Map();
+  for (const [k, n] of rows) {
+    if (k.pkg || !isMain(k)) continue;
+    const d = dept(k);
+    if (!groups.has(d)) groups.set(d, []);
+    groups.get(d).push([k, n], ...accOf(k));
+  }
+  const order = (d) => (d === "Crew" ? 90 : (cats.indexOf(d) + 1 || 80));
+  const section = (title, lines, body) => {
+    const units = lines.filter(([x]) => !isCrewLine(x)).reduce((s, [x]) => s + (Number(x.qty) || 0), 0);
+    const crew = lines.filter(([x]) => isCrewLine(x)).reduce((s, [x]) => s + (Number(x.qty) || 0), 0);
+    return `<div class="kit-dept"><div class="kit-dept-head"><b>${esc(title)}</b><span class="muted">${units ? units + " item" + (units === 1 ? "" : "s") : crew + " crew"}</span><b class="money-only">${money(lines.reduce((s, [x]) => s + lineTotal(x), 0))}</b></div>${body}</div>`;
+  };
+  let html = [...groups].sort(([a], [b]) => order(a) - order(b) || a.localeCompare(b)).map(([d, lines]) => section(d, lines, lines.map(([k, n]) => kitLine(k, n)).join(""))).join("");
+  // Packages: one section, each package a single line that opens to show what's in it.
+  const pkgs = [...new Set(draftKit.filter((k) => k.pkg).map((k) => k.pkg))];
+  if (pkgs.length) {
+    const all = rows.filter(([k]) => k.pkg);
+    html += section(
+      "Packages",
+      all,
+      pkgs
+        .map((pkg) => {
+          const lines = rows.filter(([x]) => x.pkg === pkg),
+            name = lines[0][0].package;
+          const units = lines.reduce((s, [x]) => s + (Number(x.qty) || 0), 0);
+          return `<details class="pkg-line" ${pkgOpen.has(pkg) ? "open" : ""} ontoggle="this.open ? pkgOpen.add(${pkg}) : pkgOpen.delete(${pkg})"><summary><div><b>${esc(name)}</b><span class="muted">Package · ${units} item${units === 1 ? "" : "s"} · tap to see what's in it</span></div><b class="kit-line-total money-only">${money(lines.reduce((s, [x]) => s + lineTotal(x), 0))}</b><button class="kit-x" type="button" onclick="event.preventDefault();removePackageFromJob(${pkg})" aria-label="Remove ${esc(name)}">×</button></summary>${lines.map(([x, i]) => kitLine(x, i)).join("")}</details>`;
+        })
+        .join(""),
+    );
+  }
+  return html;
 }
 function removePackageFromJob(pkg) {
   draftKit = draftKit.filter((k) => k.pkg !== pkg);

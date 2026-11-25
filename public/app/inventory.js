@@ -17,6 +17,8 @@ function inventoryMatches() {
   const q = inventoryQuery.toLowerCase();
   return db.inventory.filter((i) => (!q || i.name.toLowerCase().includes(q) || (i.notes || "").toLowerCase().includes(q)) && (!inventoryCat || (i.category || "") === inventoryCat));
 }
+// Friendlier names for the departments in drop-downs.
+const DEPT_LABELS = { Visual: "Visual (screens, projection, cameras)", "Stage & Rigging": "Stage & Rigging (truss, staging, hoists)", "Power Distribution": "Power Distribution (distro, cables, generators)", "Labour / Crew": "Labour / Crew", Transport: "Transport (vans, delivery)", Install: "Install" };
 const inventoryCats = () => [...new Set([...cats, ...db.inventory.map((i) => i.category).filter(Boolean)])];
 function inventory() {
   const t = inventoryTotals(db.inventory);
@@ -92,8 +94,8 @@ function editItem(id) {
   const withEst = (field, name, on) => field.replace("</label>", `<span class="est-line"><input type="checkbox" name="${name}" ${on ? "checked" : ""}> This is an estimate</span></label>`);
   root.innerHTML = `<form class="panel" onsubmit="saveItem(event,${isNew ? "null" : id})"><div class="line"><h2 style="margin:0">${isNew ? "Add equipment" : "Edit " + esc(i.name)}</h2><button type="button" class="btn small ghost" onclick="$('itemDialog').remove()">Close</button></div>
     <div class="form" style="margin-top:14px">
-      <label class="wide"><span class="muted">Equipment name</span><input class="field" name="name" required value="${esc(i.name)}" placeholder="e.g. Allen & Heath SQ5"></label>
-      <label><span class="muted">Category</span><select class="field" name="category">${inventoryCats().map((c) => `<option ${c === i.category ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></label>
+      <label><span class="muted">Equipment name</span><input class="field" name="name" required value="${esc(i.name)}" placeholder="e.g. Allen & Heath SQ5" ${isNew ? `oninput="if(!this.form.category.dataset.touched)this.form.category.value=guessCategory(this.value)"` : ""}></label>
+      <label><span class="muted">Department</span><select class="field" name="category" required onchange="this.dataset.touched=1">${inventoryCats().map((c) => `<option value="${esc(c)}" ${c === i.category ? "selected" : ""}>${esc(DEPT_LABELS[c] || c)}</option>`).join("")}</select><span class="hint">Sorts it on jobs, quotes and picking lists.</span></label>
       ${numField("qty", "Quantity owned", i.qty, "1")}${numField("service", "Out for service", i.service, "1")}
       ${withEst(numField("weightKg", "Weight each (kg), as it travels", i.weightKg), "weightEst", i.weightEst)}
       ${me.money ? `${withEst(numField("value", "Value each (£): what it's worth or cost", i.value, "1"), "valueEst", i.valueEst)}${numField("price", "Default hire price per day (£)", i.price, "0.01")}` : ""}

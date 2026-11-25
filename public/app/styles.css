@@ -775,3 +775,9 @@ body { background: var(--bg); }
 .kb-add .field { width: 64px; min-height: 40px; padding: 6px 8px; }
 @media (max-width: 1100px) { .job-workspace { grid-template-columns: minmax(0, 1fr); } .jw-browser { order: 3; min-height: 0; } .jw-list { order: 4; } .jw-sticky { position: static; max-height: none; } }
 @media (max-width: 820px) { .job-workspace { grid-template-columns: 1fr; } .job-cards { grid-template-columns: 1fr; } .kb-row { grid-template-columns: minmax(0, 1fr) auto; } .kb-add { grid-column: 1 / -1; } .jw-details .jw-wide { grid-column: auto; } .jw-top { position: static; } }
+.kit-dept { border: 1px solid var(--border); border-radius: 14px; margin: 10px 0; overflow: hidden; background: #fff; }
+.kit-dept-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: linear-gradient(120deg, #e6fbfb, #f1eaff); border-bottom: 1px solid var(--border); }
+.kit-dept-head b:first-child { font-size: 15px; letter-spacing: .02em; }
+.kit-dept-head .muted { flex: 1; font-size: 13px; }
+.kit-dept > .kit-line, .kit-dept > .pkg-line { margin-left: 12px; margin-right: 12px; }
+.kit-dept > .kit-line:last-child { border-bottom: 0; }
