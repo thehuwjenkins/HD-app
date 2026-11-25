@@ -144,7 +144,8 @@ function validatePlans(plans){
 }
 export function validate(state) {
   validatePlans(state.plans);
-  for(const key of ['jobs','inventory','staff','clients','tasks','projects','packages','crewInvites','crossHires','quotes']) {
+  for(const key of ['jobs','inventory','staff','clients','tasks','projects','packages','crewInvites','crossHires','quotes','jobTemplates']) {
+    if(key==='jobTemplates'&&state[key]===undefined) continue;
     if(!Array.isArray(state[key])) throw Error('Missing '+key);
     const ids = new Set();
     for(const row of state[key]){

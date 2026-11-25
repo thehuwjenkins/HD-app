@@ -3,7 +3,7 @@
 import {validate} from '../public/app/stock.js';
 
 // App collection name -> table name.
-export const TABLES={jobs:'jobs',inventory:'inventory',staff:'staff',clients:'clients',tasks:'tasks',projects:'projects',packages:'packages',crewInvites:'crew_invites',crossHires:'cross_hires',quotes:'quotes',plans:'plans',jobReports:'job_reports'};
+export const TABLES={jobs:'jobs',inventory:'inventory',staff:'staff',clients:'clients',tasks:'tasks',projects:'projects',packages:'packages',crewInvites:'crew_invites',crossHires:'cross_hires',quotes:'quotes',plans:'plans',jobReports:'job_reports',jobTemplates:'job_templates'};
 export const COLLECTIONS=Object.keys(TABLES);
 const SETTINGS='settings';
 const SETTING_KEY=/^[A-Za-z][A-Za-z0-9_]{0,40}$/;

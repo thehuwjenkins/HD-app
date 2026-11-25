@@ -61,9 +61,9 @@ function removePackageFromJob(pkg) {
 // Right: this job's list, the quote total, van check and Save.
 let jobEditorOpen = false;
 function jobEditor() {
-  const j = db.jobs.find((x) => x.id === editingJob) || {};
+  const j = db.jobs.find((x) => x.id === editingJob) || (jobFromTemplate ? { ...jobFromTemplate } : {});
   return `<form id="jobForm" class="job-workspace" onsubmit="saveJob(event)" oninput="if(event.target.name==='start'||event.target.name==='end')refreshKitResults()">
-  <div class="jw-top"><button type="button" class="btn small ghost" onclick="cancelEdit()">← All jobs</button><h2>${editingJob ? "Edit job · " + esc(j.title) : "New job"}</h2>${editingJob ? stageTag(j) : ""}<span class="grow"></span><button class="btn secondary" type="button" onclick="cancelEdit()">Cancel</button><button class="btn" type="submit">${editingJob ? "Save changes" : "Save job"}</button></div>
+  <div class="jw-top"><button type="button" class="btn small ghost" onclick="cancelEdit()">← All jobs</button><h2>${editingJob ? "Edit job · " + esc(j.title) : jobFromTemplate ? "New job from template · " + esc(jobFromTemplate.name) : "New job"}</h2>${editingJob ? stageTag(j) : ""}<span class="grow"></span>${canWrite("jobTemplates") ? `<button class="btn secondary" type="button" onclick="saveAsTemplate()">Save as template</button>` : ""}<button class="btn secondary" type="button" onclick="cancelEdit()">Cancel</button><button class="btn" type="submit">${editingJob ? "Save changes" : "Save job"}</button></div>
   <section class="jw-details panel"><h3 class="jw-full">Job details</h3>
     <label><span class="muted">Job name</span><input class="field" name="title" required value="${esc(j.title || "")}" placeholder="e.g. Brangwyn Hall awards"></label>
     <label><span class="muted">Client</span><select class="field" name="clientId">${clientOptions(j.clientId)}</select><button type="button" class="btn small secondary" style="margin-top:6px" onclick="quickClient()">+ Create client</button></label>
@@ -220,7 +220,7 @@ let jobFilter = "active",
   jobQuery = "";
 function jobs() {
   if (jobEditorOpen) return jobEditor();
-  return `<div class="panel jobs-page"><div class="jobs-head"><h2 style="margin:0">Jobs</h2><input class="field" placeholder="Search jobs, clients, venues…" value="${esc(jobQuery)}" oninput="jobQuery=this.value;$('jobList').innerHTML=jobList()"><select class="field" onchange="jobFilter=this.value;$('jobList').innerHTML=jobList()">${[["active", "Active (not finished)"], ["upcoming", "Upcoming (today on)"], ["all", "All jobs"], ["late", "Late returns"], ...(me.money ? [["unpaid", "Invoices unpaid"]] : []), ...STAGES.map((s) => [s, STAGE_LABELS[s]])].map(([v, l]) => `<option value="${v}" ${v === jobFilter ? "selected" : ""}>${l} (${jobsIn(v).length})</option>`).join("")}</select>${canWrite("jobs") ? `<button class="btn" onclick="newJob()">+ New job</button>` : ""}</div><div id="jobList" class="job-cards">${jobList()}</div></div>`;
+  return `<div class="panel jobs-page"><div class="jobs-head"><h2 style="margin:0">Jobs</h2><input class="field" placeholder="Search jobs, clients, venues…" value="${esc(jobQuery)}" oninput="jobQuery=this.value;$('jobList').innerHTML=jobList()"><select class="field" onchange="jobFilter=this.value;$('jobList').innerHTML=jobList()">${[["active", "Active (not finished)"], ["upcoming", "Upcoming (today on)"], ["all", "All jobs"], ["late", "Late returns"], ...(me.money ? [["unpaid", "Invoices unpaid"]] : []), ...STAGES.map((s) => [s, STAGE_LABELS[s]])].map(([v, l]) => `<option value="${v}" ${v === jobFilter ? "selected" : ""}>${l} (${jobsIn(v).length})</option>`).join("")}</select>${canWrite("jobs") && db.jobTemplates.length ? `<select class="field" style="max-width:240px" aria-label="New job from a template" onchange="if(this.value)newJobFromTemplate(Number(this.value))"><option value="">New job from template…</option>${db.jobTemplates.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join("")}</select>` : ""}${canWrite("jobs") ? `<button class="btn" onclick="newJob()">+ New job</button>` : ""}</div>${templateList()}<div id="jobList" class="job-cards">${jobList()}</div></div>`;
 }
 // The jobs in a Jobs-list filter: a stage, "active", "all" or "late". Uses the same stage the workflow sets.
 function jobsIn(filter) {
@@ -245,12 +245,13 @@ function jobList() {
     .map((j) => {
       const issues = jobShortages(j);
       const items = (j.kit || []).reduce((n, k) => n + Number(k.qty), 0);
-      return `<div class="jobcard"><div class="head"><div><b>${esc(j.title)}</b><div class="muted">${esc(j.client || "No client")} · ${esc(fmtRange(j))}</div></div>${stageTag(j)}</div>${j.acceptedAt ? `<div class="accepted-line">Accepted ${j.acceptedVia === "client link" ? "online by " + esc(j.acceptedBy) : ""} on ${esc(fmtDay(j.acceptedAt.slice(0, 10), { day: "numeric", month: "short" }))}${j.invoiceNo ? " · Invoice " + esc(j.invoiceNo) + (j.paidAt ? " paid" : j.invoiceSentAt ? " sent, awaiting payment" : " not sent yet") : ""}</div>` : j.quoteSentAt && stageOf(j) === "quote" ? `<div class="accepted-line muted">Quote sent ${esc(fmtDay(j.quoteSentAt.slice(0, 10), { day: "numeric", month: "short" }))}${j.quoteToken ? ` · <a href="${esc(clientLink(j))}" target="_blank" rel="noopener">client's quote page</a>` : ""}</div>` : ""}${canWrite("jobs") && nextActions(j) ? `<div class="next-step"><span class="muted">Next step</span>${nextActions(j)}</div>` : ""}${(() => { const inv = db.crewInvites.filter((i) => String(i.jobId) === String(j.id)); if (!inv.length) return ""; const st = (i) => (i.status === "Accepted" ? "accepted" : i.status === "Declined" ? "declined" : i.status === "Invited" ? "invited" : "not sent"); return `<div class="crew-line">Crew: ${inv.map((i) => `<span class="crew-${st(i).replace(" ", "-")}">${esc(db.staff.find((m) => String(m.id) === String(i.staffId))?.name || "?")} (${st(i)})</span>`).join(", ")}</div>`; })()}${reportsBadge(j) ? `<div class="toolbar" style="margin:6px 0 0">${reportsBadge(j)}</div>` : ""}<p class="muted">${(j.kit || []).length} equipment types · ${items} items · ${money(jobValue(j))}${issues.length ? ` · <span class="tag warning">${issues.length} shortage(s)</span>` : ""}${bookingTag(j) ? " · " + bookingTag(j) : ""}${isLate(j) ? ` · <span class="tag danger-tag">Late return</span>` : ""}${(() => { const l = loadCheck(j, db.inventory, vehicleList()); return l.over ? ` · <span class="tag warning">Overloaded: ${kg(l.kg)} of ${kg(l.payload)}</span>` : l.kg ? ` · ${kg(l.kg)}` : ""; })()}</p><div class="jobactions"><button class="btn small" onclick="editJob(${j.id})">Edit</button>${(() => { const pl = db.plans.find((x) => x.jobId === j.id); return pl ? `<button class="btn small secondary" onclick="openPlan(${pl.id})">Plan</button>` : `<button class="btn small secondary" onclick="planDialog(${j.id})">Plan event</button>`; })()}<button class="btn small secondary" onclick="printJob(${j.id})">Picking list</button>${canWrite("jobs") ? `<button class="btn small secondary" onclick="openBooking(${j.id},'out')">Book out</button><button class="btn small secondary" onclick="openBooking(${j.id},'in')">Book in</button>` : ""}${me.owner ? `<button class="btn small secondary" onclick="sendToClient(${j.id},'invoice')">${j.invoiceNo ? "Send invoice " + esc(j.invoiceNo) : "Send invoice"}</button>` : ""}${me.money ? `<button class="btn small secondary" onclick="sendToClient(${j.id},'quote')">Send quote</button>` : ""}<button class="btn small secondary" onclick="crewInviteEditor(${j.id})">Crew</button><button class="btn small secondary" onclick="duplicateJob(${j.id})">Duplicate</button><button class="btn small danger" onclick="deleteJob(${j.id})">Delete</button></div></div>`;
+      return `<div class="jobcard"><div class="head"><div><b>${esc(j.title)}</b><div class="muted">${esc(j.client || "No client")} · ${esc(fmtRange(j))}</div></div>${stageTag(j)}</div>${j.acceptedAt ? `<div class="accepted-line">Accepted ${j.acceptedVia === "client link" ? "online by " + esc(j.acceptedBy) : ""} on ${esc(fmtDay(j.acceptedAt.slice(0, 10), { day: "numeric", month: "short" }))}${j.invoiceNo ? " · Invoice " + esc(j.invoiceNo) + (j.paidAt ? " paid" : j.invoiceSentAt ? " sent, awaiting payment" : " not sent yet") : ""}</div>` : j.quoteSentAt && stageOf(j) === "quote" ? `<div class="accepted-line muted">Quote sent ${esc(fmtDay(j.quoteSentAt.slice(0, 10), { day: "numeric", month: "short" }))}${j.quoteToken ? ` · <a href="${esc(clientLink(j))}" target="_blank" rel="noopener">client's quote page</a>` : ""}</div>` : ""}${canWrite("jobs") && nextActions(j) ? `<div class="next-step"><span class="muted">Next step</span>${nextActions(j)}</div>` : ""}${(() => { const inv = db.crewInvites.filter((i) => String(i.jobId) === String(j.id)); if (!inv.length) return ""; const st = (i) => (i.status === "Accepted" ? "accepted" : i.status === "Declined" ? "declined" : i.status === "Invited" ? "invited" : "not sent"); return `<div class="crew-line">Crew: ${inv.map((i) => `<span class="crew-${st(i).replace(" ", "-")}">${esc(db.staff.find((m) => String(m.id) === String(i.staffId))?.name || "?")} (${st(i)})</span>`).join(", ")}</div>`; })()}${reportsBadge(j) ? `<div class="toolbar" style="margin:6px 0 0">${reportsBadge(j)}</div>` : ""}<p class="muted">${(j.kit || []).length} equipment types · ${items} items · ${money(jobValue(j))}${issues.length ? ` · <span class="tag warning">${issues.length} shortage(s)</span>` : ""}${bookingTag(j) ? " · " + bookingTag(j) : ""}${isLate(j) ? ` · <span class="tag danger-tag">Late return</span>` : ""}${(() => { const l = loadCheck(j, db.inventory, vehicleList()); return l.over ? ` · <span class="tag warning">Overloaded: ${kg(l.kg)} of ${kg(l.payload)}</span>` : l.kg ? ` · ${kg(l.kg)}` : ""; })()}</p><div class="jobactions"><button class="btn small" onclick="editJob(${j.id})">Edit</button>${(() => { const pl = db.plans.find((x) => x.jobId === j.id); return pl ? `<button class="btn small secondary" onclick="openPlan(${pl.id})">Plan</button>` : `<button class="btn small secondary" onclick="planDialog(${j.id})">Plan event</button>`; })()}<button class="btn small secondary" onclick="printJob(${j.id})">Picking list</button>${canWrite("jobs") ? `<button class="btn small secondary" onclick="openBooking(${j.id},'out')">Book out</button><button class="btn small secondary" onclick="openBooking(${j.id},'in')">Book in</button>` : ""}${me.owner ? `<button class="btn small secondary" onclick="sendToClient(${j.id},'invoice')">${j.invoiceNo ? "Send invoice " + esc(j.invoiceNo) : "Send invoice"}</button>` : ""}${me.money ? `<button class="btn small secondary" onclick="sendToClient(${j.id},'quote')">Send quote</button>` : ""}<button class="btn small secondary" onclick="crewInviteEditor(${j.id})">Crew</button><button class="btn small secondary" onclick="duplicateJob(${j.id})">Duplicate</button>${canWrite("jobTemplates") ? `<button class="btn small secondary" onclick="templateFromJob(${j.id})">Save as template</button>` : ""}<button class="btn small danger" onclick="deleteJob(${j.id})">Delete</button></div></div>`;
     })
     .join("");
 }
 function newJob() {
   editingJob = null;
+  jobFromTemplate = null;
   draftKit = [];
   jobEditorOpen = true;
   go("Jobs");
@@ -277,6 +278,7 @@ function editJob(id) {
 }
 function cancelEdit() {
   editingJob = null;
+  jobFromTemplate = null;
   draftKit = [];
   jobEditorOpen = false;
   render();
@@ -337,6 +339,7 @@ function saveJob(e) {
   syncPlanFromJob(old, saved);
   jobEditorOpen = false;
   editingJob = null;
+  jobFromTemplate = null;
   draftKit = [];
   save();
   render();
@@ -392,7 +395,7 @@ function duplicateJob(id) {
   let j = db.jobs.find((j) => j.id === id);
   if (!j) return;
   // A fresh enquiry: same kit and details, but none of the original's quote, acceptance or invoice.
-  const { quoteToken, quoteSentAt, acceptedAt, acceptedBy, acceptedVia, needsBooking, invoiceNo, invoiceDate, invoiceSentAt, hiredOutAt, returnedAt, invoicedAt, ...rest } = j;
+  const { quoteToken, quoteSentAt, acceptedAt, acceptedBy, acceptedVia, needsBooking, invoiceNo, invoiceDate, invoiceSentAt, hiredOutAt, returnedAt, invoicedAt, paidAt, movements, ...rest } = j;
   let copy = {
     ...rest,
     booking: "Draft",
@@ -418,4 +421,79 @@ function jobValue(j) {
     (j.kit || []).reduce((sum, k) => sum + lineTotal(k), 0) -
       (Number(j.discount) || 0),
   );
+}
+
+// ---------- Job templates ----------
+// A template keeps a job's kit, crew lines, client, venue, lead crew, schedule and notes, but no dates,
+// stage, quote, invoice or booking history. "New job from template" opens the job builder pre-filled.
+let jobFromTemplate = null;
+const TEMPLATE_FIELDS = ["title", "clientId", "client", "venue", "staffId", "load", "notes", "discount", "vehicleIds"];
+function templateData(src, kit) {
+  const t = {};
+  for (const f of TEMPLATE_FIELDS) if (src[f] !== undefined && src[f] !== "") t[f] = src[f];
+  t.kit = (kit || []).map(({ pkg, ...k }) => ({ ...k, qty: Number(k.qty) || 1, ...(pkg ? { pkg } : {}) }));
+  return t;
+}
+function storeTemplate(t) {
+  const name = prompt("Name this template (e.g. Small PA wedding, Conference day):", t.title || "");
+  if (!name || !name.trim()) return;
+  const existing = db.jobTemplates.find((x) => x.name.toLowerCase() === name.trim().toLowerCase());
+  if (existing && !confirm(`There's already a template called "${existing.name}". Replace it?`)) return;
+  if (existing) Object.assign(existing, t, { name: name.trim(), updatedAt: new Date().toISOString() });
+  else db.jobTemplates.push({ id: uid(), name: name.trim(), ...t, createdAt: new Date().toISOString() });
+  save();
+  render();
+  toast(`Template "${name.trim()}" saved`);
+}
+function templateFromJob(id) {
+  const j = db.jobs.find((x) => x.id === id);
+  if (j) storeTemplate(templateData(j, j.kit));
+}
+// From the job builder: whatever is in the form right now, even before the job is saved.
+function saveAsTemplate() {
+  const f = document.getElementById("jobForm");
+  const d = Object.fromEntries(new FormData(f));
+  d.vehicleIds = Object.keys(d).filter((k) => k.startsWith("vehicle_")).map((k) => Number(k.slice(8)));
+  d.client = clientName(d.clientId);
+  d.discount = Math.max(0, Number(d.discount) || 0);
+  if (!draftKit.length && !confirm("This job has no equipment yet. Save the template anyway?")) return;
+  storeTemplate(templateData(d, draftKit));
+}
+function newJobFromTemplate(id) {
+  const t = db.jobTemplates.find((x) => x.id === id);
+  if (!t) return;
+  editingJob = null;
+  // Package lines get a fresh group id so two jobs from one template never share a package instance.
+  const ids = {};
+  draftKit = (t.kit || []).map((k) => ({ ...k, ...(k.pkg ? { pkg: (ids[k.pkg] ??= uid() + Object.keys(ids).length) } : {}) }));
+  const known = (k) => k.external || isCrewLine(k) || db.inventory.some((i) => i.name === k.item);
+  const missing = draftKit.filter((k) => !known(k)).map((k) => k.item);
+  jobFromTemplate = { ...t, stage: "enquiry", clientId: db.clients.some((c) => String(c.id) === String(t.clientId)) ? t.clientId : "" };
+  jobEditorOpen = true;
+  go("Jobs");
+  window.scrollTo(0, 0);
+  refreshKitResults();
+  if (missing.length) alert("These items in the template are no longer in the inventory: " + missing.join(", ") + ". Remove or replace them before booking.");
+}
+function templateList() {
+  if (!db.jobTemplates.length) return "";
+  const w = canWrite("jobTemplates");
+  return `<details class="templates"><summary>Job templates (${db.jobTemplates.length})</summary>${db.jobTemplates
+    .map((t) => `<div class="line"><div><b>${esc(t.name)}</b><div class="muted">${(t.kit || []).length} line${(t.kit || []).length === 1 ? "" : "s"}${t.venue ? " · " + esc(t.venue) : ""}${t.client ? " · " + esc(t.client) : ""}</div></div><div class="toolbar" style="margin:0">${canWrite("jobs") ? `<button class="btn small" onclick="newJobFromTemplate(${t.id})">New job from this</button>` : ""}${w ? `<button class="btn small secondary" onclick="renameTemplate(${t.id})">Rename</button><button class="btn small danger" onclick="deleteTemplate(${t.id})">Delete</button>` : ""}</div></div>`)
+    .join("")}<p class="hint">To change what's in a template, start a job from it, change the kit, then use Save as template with the same name.</p></details>`;
+}
+function renameTemplate(id) {
+  const t = db.jobTemplates.find((x) => x.id === id);
+  const name = prompt("New name for this template:", t.name);
+  if (!name || !name.trim()) return;
+  t.name = name.trim();
+  save();
+  render();
+}
+function deleteTemplate(id) {
+  const t = db.jobTemplates.find((x) => x.id === id);
+  if (!confirm(`Delete the template "${t.name}"?\n\nJobs already made from it are not affected.`)) return;
+  db.jobTemplates = db.jobTemplates.filter((x) => x.id !== id);
+  save();
+  render();
 }

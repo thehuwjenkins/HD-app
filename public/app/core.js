@@ -27,6 +27,7 @@ db.branding = db.branding || { logo: DEFAULT_HD_LOGO };
 db.crewInvites = db.crewInvites || [];
 db.plans = db.plans || [];
 db.jobReports = db.jobReports || [];
+db.jobTemplates = db.jobTemplates || [];
 let inventoryView = "grid";
 let inventoryQuery = "";
 let inventoryCat = "";

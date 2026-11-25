@@ -80,7 +80,7 @@ const crewShell=body=>'<!doctype html><html lang="en"><head><meta charset="utf-8
   +'.none{background:var(--card);border-radius:14px;padding:20px;text-align:center;color:var(--muted)}.foot{color:var(--muted);font-size:14px;margin-top:24px}'
   +'</style><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&display=swap"></head><body><header><img alt="HD Events" src="/logo.png"></header>'+body+'</body></html>';
 
-const NAMES={jobs:'Jobs',inventory:'Equipment',staff:'Staff',clients:'Contacts',tasks:'Tasks',projects:'Projects',packages:'Packages',crewInvites:'Crew invitations',crossHires:'Cross-hires',quotes:'Quotes',plans:'Event plans',jobReports:'Crew reports'};
+const NAMES={jobs:'Jobs',inventory:'Equipment',staff:'Staff',clients:'Contacts',tasks:'Tasks',projects:'Projects',packages:'Packages',crewInvites:'Crew invitations',crossHires:'Cross-hires',quotes:'Quotes',plans:'Event plans',jobReports:'Crew reports',jobTemplates:'Job templates'};
 export function upgradePage(counts,ready){
   const rows=Object.entries(counts).map(([k,n])=>'<tr><td>'+NAMES[k]+'</td><td id="b-'+k+'">'+n+'</td><td id="a-'+k+'">–</td></tr>').join('');
   return shell('HD Events HQ · Storage upgrade',`<h1>One-off storage upgrade</h1>

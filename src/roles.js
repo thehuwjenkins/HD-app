@@ -11,7 +11,7 @@
 export const SECTIONS = {
   overview: {label: 'Overview', pages: ['Overview'], write: [], read: []},
   planner: {label: 'Event Planner', pages: ['Event Planner'], write: ['plans'], read: ['plans', 'staff']},
-  jobs: {label: 'Jobs, pipeline & calendar', pages: ['Pipeline', 'Calendar', 'Jobs', 'Cross-hire'], write: ['jobs', 'crewInvites', 'crossHires', 'clients', 'jobReports'], read: ['jobs', 'crewInvites', 'crossHires', 'inventory', 'packages', 'staff', 'clients', 'jobReports']},
+  jobs: {label: 'Jobs, pipeline & calendar', pages: ['Pipeline', 'Calendar', 'Jobs', 'Cross-hire'], write: ['jobs', 'crewInvites', 'crossHires', 'clients', 'jobReports', 'jobTemplates'], read: ['jobs', 'crewInvites', 'crossHires', 'inventory', 'packages', 'staff', 'clients', 'jobReports', 'jobTemplates']},
   tasks: {label: 'Tasks & projects', pages: ['My Workday', 'Projects'], write: ['tasks', 'projects'], read: ['tasks', 'projects']},
   kit: {label: 'Kit & packages', pages: ['Inventory', 'Packages', 'Cross-hire'], write: ['inventory', 'packages', 'crossHires'], read: ['inventory', 'packages', 'crossHires', 'jobs']},
   people: {label: 'Staff & contacts', pages: ['Staff', 'Crew Portal', 'CRM'], write: ['staff', 'clients', 'crewInvites'], read: ['staff', 'clients', 'crewInvites', 'jobs']},
@@ -22,7 +22,7 @@ export const SECTION_KEYS = Object.keys(SECTIONS);
 export const OWNER_PAGES = ['Branding', 'People & access'];
 
 // Money fields per collection (top level), plus job kit line prices.
-const MONEY_FIELDS = {inventory: ['price', 'value', 'valueEst', 'valueNote'], jobs: ['discount'], crewInvites: ['fee'], packages: ['price']};
+const MONEY_FIELDS = {inventory: ['price', 'value', 'valueEst', 'valueNote'], jobs: ['discount'], jobTemplates: ['discount'], crewInvites: ['fee'], packages: ['price']};
 // Job fields shown on plans to people who can see the planner but not jobs.
 const JOB_SUMMARY = ['id', 'title', 'start', 'end', 'venue', 'stage', 'booking', 'client'];
 
@@ -72,7 +72,7 @@ export function describe(who) {
 function stripMoney(collection, r) {
   const out = {...r};
   for (const f of MONEY_FIELDS[collection] || []) delete out[f];
-  if (collection === 'jobs' && Array.isArray(out.kit)) out.kit = out.kit.map(({price, ...k}) => k);
+  if ((collection === 'jobs' || collection === 'jobTemplates') && Array.isArray(out.kit)) out.kit = out.kit.map(({price, ...k}) => k);
   return out;
 }
 
@@ -110,7 +110,7 @@ export function prepareChanges(changes, current, who) {
     for (const f of MONEY_FIELDS[ch.collection] || []) {
       if (old && f in old) data[f] = old[f]; else delete data[f];
     }
-    if (ch.collection === 'jobs' && Array.isArray(data.kit)) {
+    if ((ch.collection === 'jobs' || ch.collection === 'jobTemplates') && Array.isArray(data.kit)) {
       const prices = new Map((old?.kit || []).map((k) => [k.item, k.price]));
       const list = new Map(current.inventory.map((i) => [i.name, i.price]));
       data.kit = data.kit.map((k) => {
