@@ -4,13 +4,14 @@
 import {loadState, applyChanges, Conflict, Invalid} from './store.js';
 import {quoteSummary, nextInvoiceNo, shortages, bounds} from '../public/app/stock.js';
 import {escapeText as e} from './pages.js';
+import {sameSite} from './crew.js';
 
 export const TOKEN = /^[0-9a-f]{40}$/;
 export const QUOTE_DAYS = 30;
 const money = (n) => '£' + (Number(n) || 0).toLocaleString('en-GB', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 const day = (s) => (s ? new Date(String(s).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-GB', {day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC'}) : '');
 const addDays = (iso, n) => new Date(new Date(iso).getTime() + n * 86400000).toISOString();
-const headers = {'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer', 'x-frame-options': 'DENY',
+const headers = {'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'same-origin', 'x-frame-options': 'DENY',
   'content-security-policy': "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; script-src 'unsafe-inline'"};
 const page = (body, status = 200) => new Response(body, {status, headers: {...headers, 'content-type': 'text/html;charset=utf-8'}});
 
@@ -107,7 +108,7 @@ export async function handleClientLink(req, env, url) {
       if (req.method !== 'GET') return page('Not found', 404);
       return page(render(state, job, url.searchParams.get('accepted') ? 'Thank you. Your acceptance has been recorded.' : ''));
     }
-    if (req.method !== 'POST' || req.headers.get('origin') !== url.origin) return page('Forbidden', 403);
+    if (req.method !== 'POST' || !sameSite(req, url)) return page('Forbidden', 403);
     if (job.acceptedAt) return Response.redirect(url.origin + '/q/' + token, 303);
     if (expired(job)) return Response.redirect(url.origin + '/q/' + token, 303);
     const form = await req.formData().catch(() => null);

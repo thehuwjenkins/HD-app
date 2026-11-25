@@ -170,7 +170,8 @@ async fetch(req,env){
   const state=await currentState(env);
   if(!state)return reply('Workspace setup is incomplete',503);
   if(!state.staff.some(s=>String(s.email||'').trim().toLowerCase()===email))return reply('This email has not been invited to HD Events HQ. Ask Huw to add you.',403);
-  return html(crewPage(state,email,undefined,url.searchParams.get('msg')||''));
+  // 'same-origin' referrer policy: the crew page's forms post back here and must carry their origin.
+  return reply(crewPage(state,email,undefined,url.searchParams.get('msg')||''),200,'text/html;charset=utf-8',{'referrer-policy':'same-origin'});
 },
 // Daily backup, set by the cron trigger in wrangler.toml.
 async scheduled(event,env,ctx){

@@ -70,24 +70,32 @@ function crewPortal() {
         : '<p class="empty">Choose a crew member to preview their schedule.</p>'),
   );
 }
+// Crew invites: prepare one per person, send it by email, and see their reply (they accept or decline
+// on their "My jobs" page after signing in with the email address the invite went to).
+const INVITE_STATUS = { "Not sent": ["Not sent yet", ""], Invited: ["Invited · waiting for a reply", "warning"], Accepted: ["Accepted", "success"], Declined: ["Declined", "danger-tag"] };
+const inviteStatus = (i) => (i.status === "Draft — not sent" || !i.status ? "Not sent" : i.status);
 function crewInviteEditor(jobId) {
-  let j = db.jobs.find((x) => String(x.id) === String(jobId));
+  const j = db.jobs.find((x) => String(x.id) === String(jobId));
   if (!j) return;
-  let existing = db.crewInvites.filter((i) => String(i.jobId) === String(jobId));
-  let root = document.createElement("div");
+  const existing = db.crewInvites.filter((i) => String(i.jobId) === String(jobId));
+  document.getElementById("crewInviteModal")?.remove();
+  const root = document.createElement("div");
   root.id = "crewInviteModal";
-  root.style.cssText =
-    "position:fixed;inset:0;background:#060b15df;z-index:1000;overflow:auto;padding:5vh 12px";
-  root.innerHTML = `<div class="panel" style="max-width:720px;margin:auto"><div class="line"><h2>Crew invitations · ${esc(j.title)}</h2><button class="btn secondary" onclick="closeCrewInvite()">Close</button></div><p class="hint">Prepare an invitation for one person at a time. This local prototype does not send email or accept live responses.</p><form onsubmit="saveCrewInvite(event,${j.id})" class="form"><label><span class="muted">Crew member</span><select name="staffId" class="field" required><option value="">Select person</option>${db.staff.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join("")}</select></label><label class="money-only"><span class="muted">Fixed fee for entire job (£)</span><input name="fee" class="field" type="number" min="0" step="0.01" ${me.money ? "required" : "value=\"0\""}></label><label class="wide"><span class="muted">Role / requirements for this crew member</span><textarea name="requirements" class="field" rows="3" placeholder="e.g. FOH engineer, arrive at 08:00"></textarea></label><div class="wide"><button class="btn" type="submit">Save invitation draft</button></div></form><h2>Saved invitations</h2>${
-    existing.length
-      ? existing
-          .map((i) => {
-            let m = db.staff.find((x) => String(x.id) === String(i.staffId));
-            return `<div class="crew-invite"><b>${esc(m?.name || "Crew member")}</b> · ${money(i.fee)}<div class="muted">${esc(i.status || "Draft — not sent")}</div><p>${esc(i.requirements || "")}</p><button class="btn secondary" onclick="previewCrewInvite(${i.id})">Preview invitation</button> ${me.money ? `<button class="btn secondary" onclick="editCrewFee(${i.id})">Edit fee</button>` : ""}</div>`;
-          })
-          .join("")
-      : '<p class="hint">No invitations prepared yet.</p>'
-  }</div>`;
+  root.className = "modal";
+  const cards = existing
+    .map((i) => {
+      const m = db.staff.find((x) => String(x.id) === String(i.staffId));
+      const [label, cls] = INVITE_STATUS[inviteStatus(i)] || [i.status, ""];
+      const when = i.respondedAt || i.sentAt;
+      return `<div class="crew-invite"><div class="line" style="border:0;padding:0"><div><b>${esc(m?.name || "Crew member")}</b>${me.money ? " · " + money(i.fee) : ""}<div class="muted">${esc(m?.email || "No email address: add one under Staff")}</div></div><span class="tag ${cls}">${esc(label)}${when ? " · " + fmtDay(String(when).slice(0, 10), { day: "numeric", month: "short" }) : ""}</span></div>
+        ${i.requirements ? `<p>${esc(i.requirements)}</p>` : ""}
+        <div class="toolbar" style="margin:8px 0 0"><button class="btn small" onclick="openInviteEmail(${i.id})">${inviteStatus(i) === "Not sent" ? "Send invite" : "Send again"}</button>${me.money ? `<button class="btn small secondary" onclick="editCrewFee(${i.id})">Edit fee</button>` : ""}<button class="btn small ghost" onclick="removeCrewInvite(${i.id})">Remove</button></div></div>`;
+    })
+    .join("");
+  root.innerHTML = `<div class="panel" style="max-width:760px;margin:auto"><div class="line"><h2 style="margin:0">Crew · ${esc(j.title)}</h2><button class="btn small ghost" onclick="closeCrewInvite()">Close</button></div>
+    <p class="hint">Add each person and press <b>Send invite</b>: it opens an email to them with the job details and fee. They sign in at ${esc(location.host)} with that email address and accept or decline. Accepted jobs appear on their "My jobs" page, with damage reports, debrief and photo uploads.</p>
+    <form onsubmit="saveCrewInvite(event,${j.id})" class="form"><label><span class="muted">Crew member</span><select name="staffId" class="field" required><option value="">Select person</option>${db.staff.map((m) => `<option value="${m.id}">${esc(m.name)}${m.email ? "" : " (no email)"}</option>`).join("")}</select></label><label class="money-only"><span class="muted">Fixed fee for the whole job (£)</span><input name="fee" class="field" type="number" min="0" step="0.01" ${me.money ? "required" : 'value="0"'}></label><label class="wide"><span class="muted">Role / what you need from them</span><textarea name="requirements" class="field" rows="3" placeholder="e.g. FOH engineer, arrive at 08:00, black clothing"></textarea></label><div class="wide"><button class="btn" type="submit">Add to crew</button></div></form>
+    <h3>Crew for this job</h3>${cards || '<p class="hint">Nobody invited yet.</p>'}</div>`;
   document.body.appendChild(root);
 }
 function closeCrewInvite() {
@@ -95,40 +103,65 @@ function closeCrewInvite() {
 }
 function saveCrewInvite(e, jobId) {
   e.preventDefault();
-  let d = Object.fromEntries(new FormData(e.target));
-  let existing = db.crewInvites.find(
-    (i) => String(i.jobId) === String(jobId) && String(i.staffId) === String(d.staffId),
-  );
-  if (existing) {
-    alert("An invitation draft for this person already exists. Use Edit fee.");
-    return;
-  }
-  db.crewInvites.push({
-    id: uid(),
-    jobId,
-    staffId: d.staffId,
-    fee: Number(d.fee),
-    requirements: d.requirements,
-    status: "Draft — not sent",
-  });
+  const d = Object.fromEntries(new FormData(e.target));
+  if (db.crewInvites.some((i) => String(i.jobId) === String(jobId) && String(i.staffId) === String(d.staffId))) return alert("This person is already on the crew list for this job.");
+  const inv = { id: uid(), jobId, staffId: d.staffId, fee: Number(d.fee) || 0, requirements: d.requirements, status: "Not sent" };
+  db.crewInvites.push(inv);
   save();
-  closeCrewInvite();
   crewInviteEditor(jobId);
+  const m = db.staff.find((x) => String(x.id) === String(d.staffId));
+  if (m?.email && confirm(`Send the invite to ${m.name} now?`)) openInviteEmail(inv.id);
+}
+function removeCrewInvite(id) {
+  const i = db.crewInvites.find((x) => String(x.id) === String(id));
+  const m = db.staff.find((x) => String(x.id) === String(i.staffId));
+  if (!confirm(`Take ${m?.name || "this person"} off the crew for this job?${inviteStatus(i) === "Accepted" ? " They had accepted, so let them know." : ""}`)) return;
+  db.crewInvites = db.crewInvites.filter((x) => x !== i);
+  save();
+  crewInviteEditor(i.jobId);
+}
+// The invite email: opens in Gmail or the email app, with the job details and how to reply.
+function openInviteEmail(id) {
+  const i = db.crewInvites.find((x) => String(x.id) === String(id));
+  const j = db.jobs.find((x) => String(x.id) === String(i.jobId));
+  const m = db.staff.find((x) => String(x.id) === String(i.staffId));
+  if (!m?.email) return alert(`${m?.name || "This person"} has no email address. Add one under Staff first: they sign in with it to accept.`);
+  const co = db.company?.name || "HD Events";
+  const body = `Hi ${m.name.split(" ")[0]},\n\nWould you like to work on ${j.title}?\n\nWhen: ${fmtRange(j)}${j.venue ? "\nWhere: " + j.venue : ""}${j.load ? "\nSchedule: " + j.load : ""}${i.requirements ? "\nWhat we need: " + i.requirements : ""}\nFee for the whole job: ${"£" + (Number(i.fee) || 0).toFixed(2)}\n\nTo accept or decline, sign in at ${location.origin} with this email address (${m.email}). You'll be sent a code to sign in, then the invite is at the top of your jobs.\n\nThanks,\n${co}`;
+  document.getElementById("inviteEmail")?.remove();
+  const root = document.createElement("div");
+  root.className = "modal";
+  root.id = "inviteEmail";
+  root.innerHTML = `<div class="panel send-dialog"><div class="line"><h2 style="margin:0">Send crew invite · ${esc(m.name)}</h2><button class="btn small ghost" onclick="$('inviteEmail').remove()">Close</button></div>
+    <div class="form" style="margin-top:12px"><label class="wide"><span class="muted">To</span><input class="field" id="sendTo" value="${esc(m.email)}"></label><label class="wide"><span class="muted">Subject</span><input class="field" id="sendSubject" value="${esc("Crew invite: " + j.title)}"></label><label class="wide"><span class="muted">Message</span><textarea class="field" id="sendBody" rows="13">${esc(body)}</textarea></label></div>
+    <div class="toolbar"><button class="btn" onclick="sendInviteVia('gmail',${i.id})">Open in Gmail</button><button class="btn secondary" onclick="sendInviteVia('mailto',${i.id})">Open in email app</button><button class="btn secondary" onclick="copySend()">Copy message</button></div></div>`;
+  document.body.appendChild(root);
+}
+function sendInviteVia(how, id) {
+  const to = $("sendTo").value.trim(),
+    su = $("sendSubject").value,
+    body = $("sendBody").value;
+  const url = how === "gmail" ? "https://mail.google.com/mail/?view=cm&fs=1&to=" + encodeURIComponent(to) + "&su=" + encodeURIComponent(su) + "&body=" + encodeURIComponent(body) : "mailto:" + encodeURIComponent(to) + "?subject=" + encodeURIComponent(su) + "&body=" + encodeURIComponent(body);
+  if (how === "gmail") window.open(url, "_blank", "noopener");
+  else location.href = url;
+  const i = db.crewInvites.find((x) => String(x.id) === String(id));
+  if (inviteStatus(i) !== "Accepted") i.status = "Invited";
+  i.sentAt = new Date().toISOString();
+  save();
+  $("inviteEmail")?.remove();
+  crewInviteEditor(i.jobId);
+  toast("Invite ready to send in your email");
 }
 function editCrewFee(id) {
-  let i = db.crewInvites.find((x) => String(x.id) === String(id));
+  const i = db.crewInvites.find((x) => String(x.id) === String(id));
   if (!i) return;
-  let v = prompt("New fixed total job fee (£)", i.fee);
+  const v = prompt("New fixed fee for the whole job (£)", i.fee);
   if (v === null) return;
-  if (v.trim() === "" || !Number.isFinite(Number(v)) || Number(v) < 0) {
-    alert("Enter a valid amount.");
-    return;
-  }
+  if (v.trim() === "" || !Number.isFinite(Number(v)) || Number(v) < 0) return alert("Enter a valid amount.");
   i.fee = Number(v);
-  i.status = "Draft — not sent";
   save();
-  closeCrewInvite();
   crewInviteEditor(i.jobId);
+  if (inviteStatus(i) !== "Not sent" && confirm("The fee has changed. Send them an updated invite?")) openInviteEmail(i.id);
 }
 function previewCrewInvite(id) {
   let i = db.crewInvites.find((x) => String(x.id) === String(id));

@@ -6,7 +6,9 @@ const shell=(title,body)=>'<!doctype html><html lang="en"><head><meta charset="u
 // Crew see only the jobs assigned to them, and only these fields (no prices, notes or client details).
 export function crewJobs(state,email){
   const ids=new Set(state.staff.filter(s=>String(s.email||'').trim().toLowerCase()===email).map(s=>String(s.id)));
-  return state.jobs.filter(j=>ids.has(String(j.staffId))).map(j=>({id:j.id,title:j.title,venue:j.venue,start:j.start,end:j.end,load:j.load,stage:stageOf(j),
+  // On the job as its staff member, or by accepting a crew invite.
+  const accepted=new Set((state.crewInvites||[]).filter(i=>ids.has(String(i.staffId))&&i.status==='Accepted').map(i=>String(i.jobId)));
+  return state.jobs.filter(j=>ids.has(String(j.staffId))||accepted.has(String(j.id))).map(j=>({id:j.id,title:j.title,venue:j.venue,start:j.start,end:j.end,load:j.load,stage:stageOf(j),
     items:[...new Set((j.kit||[]).filter(k=>k.category!=='Labour / Crew').map(k=>k.item))]}));
 }
 const ukToday=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'}).format(new Date()); // YYYY-MM-DD
@@ -16,14 +18,13 @@ const time=s=>/T(\d\d:\d\d)$/.exec(s||'')?.[1]||'';
 const STATUS={enquiry:['Provisional','prov'],quote:['Provisional','prov'],booked:['Confirmed','conf'],out:['Confirmed','conf'],returned:['Finished','done'],invoiced:['Finished','done']};
 // Report damage, write a debrief and upload receipts / venue photos for a job.
 function crewTools(j,reports){
-  const opt=j.items.map(n=>'<option>'+escapeText(n)+'</option>').join('')+'<option>Other</option>';
   const mine=reports.filter(r=>r.jobId===j.id);
-  const list=mine.length?'<ul class="mine">'+mine.map(r=>'<li><b>'+({damage:'Damage: '+escapeText(r.item),debrief:'Debrief',photo:escapeText(r.label)}[r.kind]||'')+'</b> · '+escapeText(new Date(r.at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}))+(r.kind==='photo'?' · <a href="'+escapeText(r.url)+'" target="_blank" rel="noopener">view</a>':'')+(r.text?'<br>'+escapeText(r.text.slice(0,160))+(r.text.length>160?'…':''):'')+'</li>').join('')+'</ul>':'';
+  const list=mine.length?'<ul class="mine">'+mine.map(r=>'<li><b>'+({damage:r.item?'Damage: '+escapeText(r.item):'Damage report',debrief:'Debrief',photo:escapeText(r.label)}[r.kind]||'')+'</b> · '+escapeText(new Date(r.at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}))+(r.kind==='photo'?' · <a href="'+escapeText(r.url)+'" target="_blank" rel="noopener">view</a>':'')+(r.text?'<br>'+escapeText(r.text.slice(0,160))+(r.text.length>160?'…':''):'')+'</li>').join('')+'</ul>':'';
   const f=(action,inner,multi)=>'<form method="post" action="/api/crew/'+action+'"'+(multi?' enctype="multipart/form-data"':'')+'><input type="hidden" name="jobId" value="'+j.id+'">'+inner+'</form>';
   return '<details class="tools"><summary>Report damage, debrief and photos'+(mine.length?' ('+mine.length+' sent)':'')+'</summary>'
-    +'<h3>Report damage</h3>'+f('damage','<label>Which item?<select name="item" required><option value="">Choose…</option>'+opt+'</select></label><label>What happened?<textarea name="text" rows="3" required placeholder="e.g. SM58 grille dented after it was dropped on stage. Still works but rattles."></textarea></label><button>Save damage report</button>')
+    +'<h3>Report damage</h3>'+f('damage','<label>What was damaged, and what happened? (list as many items as you need)<textarea name="text" rows="6" required placeholder="e.g. 2 x SM58: grilles dented when the mic stand fell. Both still work but rattle.&#10;1 x 10m XLR: connector pin bent at the stage box end, not working."></textarea></label><button>Save damage report</button>')
     +'<h3>Job debrief</h3>'+f('debrief','<label>Client feedback, problems on the day, and what to plan next time<textarea name="text" rows="4" required placeholder="e.g. Client was happy with the sound, but we needed two extra lights for the stage. One radio mic dropped out during the speeches (reported as damage)."></textarea></label><button>Save debrief</button>')
-    +'<h3>Receipts and venue photos</h3>'+f('photo','<fieldset><legend>This is a…</legend><label class="inline"><input type="radio" name="label" value="Receipt" required> Receipt</label><label class="inline"><input type="radio" name="label" value="Venue photo"> Venue photo</label></fieldset><label>Photo<input type="file" name="photo" accept="image/*" multiple required></label><label>Note (optional)<input name="note" maxlength="300" placeholder="e.g. Fuel for the van, or best shot of the stage"></label><button>Upload</button>',true)
+    +'<h3>Receipts and venue photos</h3>'+f('photo','<label>Receipts (choose as many as you like)<input type="file" name="receipts" accept="image/*" multiple></label><label>Venue photos (choose as many as you like)<input type="file" name="venue" accept="image/*" multiple></label><label>Note (optional)<input name="note" maxlength="300" placeholder="e.g. Fuel and parking receipts, or best shots of the stage"></label><button>Upload photos</button>',true)
     +(list?'<h3>What you have sent</h3>'+list:'')+'</details>';
 }
 function crewCard(j,reports=[]){
@@ -34,6 +35,20 @@ function crewCard(j,reports=[]){
   const maps=j.venue?' · <a href="https://www.google.com/maps/search/?api=1&amp;query='+encodeURIComponent(j.venue)+'" target="_blank" rel="noopener">Map</a>':'';
   return '<article id="job-'+j.id+'">'+box+'<div class="body"><span class="status '+cls+'">'+label+'</span><h2>'+escapeText(j.title)+'</h2><p>'+escapeText(when)+(until?'<br>'+escapeText(until):'')+'</p>'+(j.venue?'<p>'+escapeText(j.venue)+maps+'</p>':'')+(j.load?'<p class="sched">'+escapeText(j.load)+'</p>':'')+crewTools(j,reports)+'</div></article>';
 }
+// Invitations waiting for a reply: job details, fee, and Accept / Decline.
+function crewInvites(state,email){
+  const ids=new Set(state.staff.filter(s=>String(s.email||'').trim().toLowerCase()===email).map(s=>String(s.id)));
+  const open=(state.crewInvites||[]).filter(i=>ids.has(String(i.staffId))&&i.status==='Invited');
+  if(!open.length)return '';
+  const money=n=>'£'+(Number(n)||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+  return '<h2 class="inv-h">Invitations</h2>'+open.map(i=>{
+    const j=state.jobs.find(x=>String(x.id)===String(i.jobId));if(!j)return '';
+    const when=day(j.start)?fmt(j.start,{weekday:'long',day:'numeric',month:'long'})+(time(j.start)?' from '+time(j.start):''):'Date to be confirmed';
+    const f=(answer,label,cls)=>'<form method="post" action="/api/crew/invite"><input type="hidden" name="inviteId" value="'+escapeText(i.id)+'"><input type="hidden" name="answer" value="'+answer+'"><button class="'+cls+'">'+label+'</button></form>';
+    return '<article class="invite"><div class="body"><span class="status prov">Invitation</span><h2>'+escapeText(j.title)+'</h2><p>'+escapeText(when)+'</p>'+(j.venue?'<p>'+escapeText(j.venue)+'</p>':'')+(j.load?'<p class="sched">'+escapeText(j.load)+'</p>':'')
+      +(i.requirements?'<p><b>What we need:</b> '+escapeText(i.requirements)+'</p>':'')+'<p><b>Fee for the whole job:</b> '+money(i.fee)+'</p><div class="answer">'+f('accept','Accept job','yes')+f('decline','Decline','no')+'</div></div></article>';
+  }).join('');
+}
 export function crewPage(state,email,today=ukToday(),msg=''){
   const reports=(state.jobReports||[]).filter(r=>r.by===email);
   const card=j=>crewCard(j,reports);
@@ -43,6 +58,7 @@ export function crewPage(state,email,today=ukToday(),msg=''){
   const past=mine.filter(j=>!upcoming.includes(j)).reverse().slice(0,10);
   return crewShell('<h1>'+(name?'Hi '+escapeText(name.split(' ')[0]):'Your jobs')+'</h1><p class="lead">Your upcoming jobs with HD Events.</p>'
     +(msg?'<p class="msg" role="status">'+escapeText(msg.slice(0,200))+'</p>':'')
+    +crewInvites(state,email)
     +(upcoming.map(card).join('')||'<p class="none">No upcoming jobs assigned to you.</p>')
     +(past.length?'<details><summary>Recent jobs ('+past.length+')</summary>'+past.map(card).join('')+'</details>':'')
     +'<p class="foot">Questions about a job? Contact Huw. · <a href="/cdn-cgi/access/logout">Sign out</a></p>');
@@ -59,6 +75,7 @@ const crewShell=body=>'<!doctype html><html lang="en"><head><meta charset="utf-8
   +'.tools select,.tools textarea,.tools input:not([type=radio]):not([type=hidden]){font:inherit;padding:12px;border:1px solid #b4bfce;border-radius:12px;background:#fff;color:#111827;width:100%}'
   +'.tools fieldset{border:0;padding:0;margin:0;display:flex;gap:18px;flex-wrap:wrap}.tools legend{font-size:14px;color:#2f3a4b;margin-bottom:4px}.tools input[type=radio]{width:20px;height:20px;accent-color:#6d35e8}'
   +'.tools button{font:600 16px inherit;min-height:48px;border:0;border-radius:30px;color:#fff;background:linear-gradient(120deg,#00808c,#2f6fd0,#6d35e8);cursor:pointer}'
+  +'.inv-h{font-size:18px;margin:18px 0 0}.invite{border-color:#cfc2f7;background:linear-gradient(120deg,#f4fbfb,#f6f1ff)}.answer{display:flex;gap:10px;margin-top:8px}.answer form{flex:1}.answer button{width:100%;font:600 16px inherit;min-height:48px;border-radius:30px;cursor:pointer}.answer .yes{border:0;color:#fff;background:linear-gradient(120deg,#00808c,#2f6fd0,#6d35e8)}.answer .no{background:#fff;border:1px solid #b4bfce;color:#111827}'
   +'.mine{padding-left:18px;font-size:14px}.mine li{margin:6px 0}.msg{background:#e1f4ea;color:#0f6138;border-radius:12px;padding:12px 14px;font-weight:600}'
   +'.none{background:var(--card);border-radius:14px;padding:20px;text-align:center;color:var(--muted)}.foot{color:var(--muted);font-size:14px;margin-top:24px}'
   +'</style><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&display=swap"></head><body><header><img alt="HD Events" src="/logo.png"></header>'+body+'</body></html>';
