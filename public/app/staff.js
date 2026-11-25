@@ -13,9 +13,10 @@ function staff() {
       db.staff
         .map((m) => {
           const jobs = db.jobs.filter((j) => String(j.staffId) === String(m.id) && !["returned", "invoiced"].includes(stageOf(j))).length;
-          return row(`<b>${esc(m.name)}</b><div class="muted">${esc(m.role || "")}${m.email ? " · " + esc(m.email) : " · no email (can't sign in)"}${jobs ? ` · ${jobs} upcoming job${jobs > 1 ? "s" : ""}` : ""}</div>`, `<button class="btn small secondary" onclick="editStaff(${m.id})">Edit</button> <button class="btn small danger" onclick="removeStaff(${m.id})">Remove</button>`);
+          const access = me.owner ? `<div class="access-line"><span class="muted">Access:</span> ${staffAccessSelect(m, `setStaffAccess(${m.id},this.value)`) || `<span class="muted">${esc(staffAccessText(m))}</span>`}</div>` : "";
+          return row(`<b>${esc(m.name)}</b><div class="muted">${esc(m.role || "")}${m.email ? " · " + esc(m.email) : " · no email (can't sign in)"}${jobs ? ` · ${jobs} upcoming job${jobs > 1 ? "s" : ""}` : ""}</div>${access}`, `<button class="btn small secondary" onclick="editStaff(${m.id})">Edit</button> <button class="btn small danger" onclick="removeStaff(${m.id})">Remove</button>`);
         })
-        .join("") + `<p class="hint">Adding someone with an email lets them sign in to see their own jobs. Removing them, or their email, stops their sign-in.</p>`,
+        .join("") + `<p class="hint">Adding someone with an email lets them sign in. Choose their access next to their name: crew see only their own jobs; team members use the parts of HQ you choose. Removing them, or their email, stops their sign-in.</p>`,
   );
 }
 function editStaff(id) {
@@ -24,15 +25,18 @@ function editStaff(id) {
   root.className = "modal";
   root.id = "staffDialog";
   root.innerHTML = `<form class="panel" onsubmit="saveStaff(event,${id})"><div class="line"><h2 style="margin:0">Edit ${esc(m.name)}</h2><button type="button" class="btn small ghost" onclick="$('staffDialog').remove()">Close</button></div>
-    <div class="form" style="margin-top:14px"><label><span class="muted">Name</span><input class="field" name="name" required value="${esc(m.name)}"></label><label><span class="muted">Role / speciality</span><input class="field" name="role" value="${esc(m.role || "")}"></label><label class="wide"><span class="muted">Email (they sign in with this)</span><input class="field" name="email" type="email" value="${esc(m.email || "")}"></label></div>
+    <div class="form" style="margin-top:14px"><label><span class="muted">Name</span><input class="field" name="name" required value="${esc(m.name)}"></label><label><span class="muted">Role / speciality</span><input class="field" name="role" value="${esc(m.role || "")}"></label><label class="wide"><span class="muted">Email (they sign in with this)</span><input class="field" name="email" type="email" value="${esc(m.email || "")}"></label>${me.owner && staffAccessSelect(m, "") ? `<label class="wide"><span class="muted">Access</span>${staffAccessSelect(m, "").replace('class="field access-level"', 'class="field access-level" name="access"')}<span class="hint">Crew see only their own jobs. Team members use the parts of HQ you choose.</span></label>` : ""}</div>
     <button class="btn big" type="submit">Save</button></form>`;
   document.body.appendChild(root);
 }
 function saveStaff(e, id) {
   e.preventDefault();
   const d = data(e);
-  Object.assign(db.staff.find((x) => x.id === id), { name: d.name.trim(), role: d.role.trim(), email: d.email.trim().toLowerCase() });
+  const m = db.staff.find((x) => x.id === id), oldEmail = m.email;
+  Object.assign(m, { name: d.name.trim(), role: d.role.trim(), email: d.email.trim().toLowerCase() });
+  if (me.owner) syncMemberFromStaff(oldEmail, m);
   $("staffDialog").remove();
+  if (me.owner && d.access && d.access !== staffAccessLevel(m) && m.email) return setStaffAccess(id, d.access);
   save();
   render();
 }
@@ -41,10 +45,11 @@ function removeStaff(id) {
   const m = db.staff.find((x) => x.id === id);
   const jobs = db.jobs.filter((j) => String(j.staffId) === String(id));
   const invites = db.crewInvites.filter((i) => String(i.staffId) === String(id));
-  if (!confirm(`Remove ${m.name}?` + (jobs.length ? `\n\nThey'll be taken off ${jobs.length} job${jobs.length > 1 ? "s" : ""}: ${jobs.slice(0, 4).map((j) => j.title).join(", ")}${jobs.length > 4 ? "…" : ""}.` : "") + (invites.length ? `\n${invites.length} crew booking${invites.length > 1 ? "s" : ""} will be removed.` : "") + (m.email ? "\n\nThey will no longer be able to sign in." : ""))) return;
+  if (!confirm(`Remove ${m.name}?` + (jobs.length ? `\n\nThey'll be taken off ${jobs.length} job${jobs.length > 1 ? "s" : ""}: ${jobs.slice(0, 4).map((j) => j.title).join(", ")}${jobs.length > 4 ? "…" : ""}.` : "") + (invites.length ? `\n${invites.length} crew booking${invites.length > 1 ? "s" : ""} will be removed.` : "") + (m.email ? "\n\nThey will no longer be able to sign in" + (staffAccessLevel(m).startsWith("p") || staffAccessLevel(m) === "custom" ? ", and their team access is removed." : ".") : ""))) return;
   jobs.forEach((j) => delete j.staffId);
   db.crewInvites = db.crewInvites.filter((i) => !invites.includes(i));
   db.staff = db.staff.filter((x) => x.id !== id);
+  if (me.owner) syncMemberFromStaff(m.email, { email: "" });
   save();
   render();
 }

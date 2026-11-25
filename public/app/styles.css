@@ -781,3 +781,5 @@ body { background: var(--bg); }
 .kit-dept-head .muted { flex: 1; font-size: 13px; }
 .kit-dept > .kit-line, .kit-dept > .pkg-line { margin-left: 12px; margin-right: 12px; }
 .kit-dept > .kit-line:last-child { border-bottom: 0; }
+.access-line { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.access-line .field.access-level { width: auto; min-width: 230px; padding: 6px 10px; font-size: 13.5px; }

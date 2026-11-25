@@ -70,8 +70,8 @@ function peopleAccess() {
       <label><span class="muted">Email they'll sign in with</span><input class="field" name="email" type="email" required></label>
       <label class="wide"><span class="muted">Starting access</span><select class="field" name="preset">${ACCESS_PRESETS.map(([l], i) => `<option value="${i}">${l}</option>`).join("")}</select><span class="hint">You can fine-tune the areas after adding them.</span></label>
       <div class="wide"><button class="btn" type="submit">Add team member</button></div></form>
-    <div class="panel"><h2 style="margin-top:0">Crew</h2><p class="hint">Crew see only their own "My jobs" page. To invite crew, add them under Staff with their email address.</p>
-    ${crew.length ? crew.map((s) => row(esc(s.name), `<span class="muted">${esc(s.email)}</span>`)).join("") : '<p class="empty">No crew with an email address yet.</p>'}
+    <div class="panel"><h2 style="margin-top:0">Staff and their access</h2><p class="hint">Everyone under Staff with an email address. Change the level to turn crew into a team member, or back. Crew see only their own "My jobs" page.</p>
+    ${crew.length ? crew.map((s) => row(`${esc(s.name)} <span class="muted">${esc(s.email)}</span>`, staffAccessSelect(s, `setStaffAccess(${s.id},this.value)`) || `<span class="muted">${esc(staffAccessText(s))}</span>`)).join("") : '<p class="empty">No crew with an email address yet.</p>'}
     <div class="toolbar"><button class="btn small secondary" onclick="go('Staff')">Open Staff</button></div></div>`;
 }
 function addMember(e) {
@@ -108,4 +108,66 @@ async function syncAccessNow() {
   if (r.ok) accessSyncResult((await r.json()).access);
   accessInfo = null;
   render();
+}
+
+// Access level per staff member, set from the Staff page (owner only). Crew see only their own jobs;
+// the other levels make them a team member with those areas of HQ.
+const sameAreas = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
+function staffAccessLevel(m) {
+  const email = String(m.email || "").trim().toLowerCase();
+  if (!/\S+@\S+\.\S+/.test(email)) return "none";
+  if (email === String(me.email || "").toLowerCase()) return "owner";
+  const mem = accessMembers().find((x) => x.email === email);
+  if (!mem) return "crew";
+  const i = ACCESS_PRESETS.findIndex(([, s]) => sameAreas(s, mem.sections));
+  return i >= 0 ? "p" + i : "custom";
+}
+function staffAccessText(m) {
+  const level = staffAccessLevel(m);
+  if (level === "none") return "No email, so they can't sign in";
+  if (level === "owner") return "Owner: full access";
+  if (level === "crew") return "Crew: sees only their own jobs";
+  const mem = accessMembers().find((x) => x.email === String(m.email).trim().toLowerCase());
+  return "Team: " + mem.sections.map((k) => (ACCESS_AREAS.find(([a]) => a === k) || [k, k])[1]).join(", ");
+}
+function staffAccessSelect(m, onchange) {
+  const level = staffAccessLevel(m);
+  if (level === "none" || level === "owner") return "";
+  const opts = [["crew", "Crew: their own jobs only"], ...ACCESS_PRESETS.map(([l], i) => ["p" + i, "Team: " + l.toLowerCase()])];
+  if (level === "custom") opts.push(["custom", "Team: custom areas"]);
+  return `<select class="field access-level" aria-label="Access level for ${esc(m.name)}" onchange="${onchange}">${opts.map(([v, l]) => `<option value="${v}" ${v === level ? "selected" : ""}>${esc(l)}</option>`).join("")}<option value="choose">Choose areas…</option></select>`;
+}
+function setStaffAccess(id, level) {
+  const m = db.staff.find((x) => String(x.id) === String(id));
+  if (!m || !me.owner) return;
+  const email = String(m.email || "").trim().toLowerCase();
+  const members = accessMembers();
+  const n = members.findIndex((x) => x.email === email);
+  if (level === "choose") {
+    if (n < 0) members.push({ name: m.name, email, sections: [...ACCESS_PRESETS[0][1]], addedAt: new Date().toISOString() });
+    save();
+    return go("People & access");
+  }
+  if (level === "custom") return;
+  if (level === "crew") {
+    if (n >= 0 && !confirm(`Change ${m.name} to crew?\n\nThey'll only see their own jobs, not the rest of HQ.`)) return render();
+    if (n >= 0) members.splice(n, 1);
+  } else {
+    const sections = [...ACCESS_PRESETS[Number(level.slice(1))][1]];
+    if (sections.includes("money") && !confirm(`Give ${m.name} access to money?\n\nThey'll see prices, quotes, invoices, discounts and crew fees.`)) return render();
+    if (n >= 0) members[n].sections = sections;
+    else members.push({ name: m.name, email, sections, addedAt: new Date().toISOString() });
+  }
+  save();
+  render();
+  toast(`${m.name}: ${staffAccessText(m).replace(/^Crew: |^Team: /, "")}`);
+}
+// Keep a team member's sign-in email and name in step when their Staff record is edited.
+function syncMemberFromStaff(oldEmail, m) {
+  const old = String(oldEmail || "").trim().toLowerCase();
+  const mem = accessMembers().find((x) => x.email === old);
+  if (!mem) return;
+  const email = String(m.email || "").trim().toLowerCase();
+  if (!email) accessMembers().splice(accessMembers().indexOf(mem), 1);
+  else Object.assign(mem, { email, name: m.name });
 }
