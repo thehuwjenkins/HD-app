@@ -10,7 +10,7 @@ import {syncAccess,accessStatus} from './accesssync.js';
 import {handleCrew} from './crew.js';
 import {handleClientLink} from './clientlink.js';
 import {handlePublicEvents} from './publicevents.js';
-import {handleSignup,listSignups,deleteSignups,LISTS} from './signups.js';
+import {handleSignup,signupCount,listSignups,deleteSignups,LISTS} from './signups.js';
 import {connectRedirect,finishConnect,googleStatus,disconnect,saveToDrive,eventFolderLink} from './google.js';
 import {STATIC} from './static.gen.js';
 // App code, styles and logo bundled into the worker (see tools/bundle-static.mjs).
@@ -170,6 +170,7 @@ async fetch(req,env){
   if(path0==='/q/logo.png'){const r=bundled('/logo-print.png');r.headers.set('cache-control','public, max-age=86400');return r;}
   // The website's Events page: events published from HQ, and their posters.
   if(path0==='/q/signup')return handleSignup(req,env);
+  if(path0==='/q/signup-count')return signupCount(req,env,new URL(req.url));
   if(path0==='/q/events.json'||path0.startsWith('/q/poster/'))return handlePublicEvents(req,env,new URL(req.url));
   if(path0.startsWith('/q/'))return handleClientLink(req,env,new URL(req.url));
   let email;

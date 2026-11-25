@@ -34,3 +34,11 @@ test('removing a sign-up', async () => {
   assert.equal(await deleteSignups(env, [s.id, 'x']), 1);
   assert.equal((await listSignups(env, 'beachfest')).length, 0);
 });
+
+test('the public count shows only a number', async () => {
+  const {signupCount} = await import('../src/signups.js');
+  await post({...good, email: 'count@example.com'});
+  const r = await signupCount(new Request('https://hq.example/q/signup-count?list=beachfest', {headers: {origin: SITE}}), env, new URL('https://hq.example/q/signup-count?list=beachfest'));
+  assert.deepEqual(await r.json(), {count: 1});
+  assert.equal(r.headers.get('access-control-allow-origin'), SITE);
+});

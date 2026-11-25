@@ -14,6 +14,14 @@ const cors = (req) => {
 const out = (req, body, status = 200) => new Response(JSON.stringify(body), {status, headers: {'content-type': 'application/json', 'cache-control': 'no-store', ...cors(req)}});
 const str = (v, max) => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, max);
 
+// How many people have signed up to a list (the number only), for "X people want it back" on the page.
+export async function signupCount(req, env, url) {
+  const list = url.searchParams.get('list') || '';
+  if (!Object.hasOwn(LISTS, list)) return out(req, {error: 'Unknown list'}, 404);
+  const r = await env.DB.prepare('SELECT COUNT(*) AS n FROM signups WHERE list=?').bind(list).first();
+  return new Response(JSON.stringify({count: r.n}), {headers: {'content-type': 'application/json', 'cache-control': 'public, max-age=30', ...cors(req)}});
+}
+
 export async function handleSignup(req, env) {
   if (req.method === 'OPTIONS') return new Response(null, {status: 204, headers: cors(req)});
   if (req.method !== 'POST') return out(req, {error: 'Not found'}, 404);
