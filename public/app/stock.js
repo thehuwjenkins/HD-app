@@ -384,5 +384,17 @@ export function quoteSummary(job,{vatRegistered=false}={}){
 }
 // Next invoice number: HD-1001, HD-1002, … (one higher than any used so far).
 export function nextInvoiceNo(jobs=[]){return 'HD-'+(jobs.reduce((m,j)=>Math.max(m,Number(String(j.invoiceNo||'').replace(/\D/g,''))||0),1000)+1);}
+// How many of an item are free for a job's dates (owned, minus out of service, kept in packages, and
+// the busiest moment of other bookings and kit still out). Without dates: what isn't out right now.
+export function freeFor(job,state,name){
+  const item=(state.inventory||[]).find(i=>i.name===name);
+  if(!item)return 0;
+  const Q=1e6,probe={...job,id:job.id??-1,kit:[{item:name,qty:Q}]};
+  const issue=shortages(probe,state).find(x=>x.name===name);
+  const others=issue?issue.required-Q:0;
+  const [a,b]=bounds(job);
+  const owned=item.qty-item.service-setAside(state,name);
+  return Math.max(0,owned-(a<b?others:outNow(state,name).qty));
+}
 // Shared with the browser: the owner page loads this file as a module and uses the same checks.
-if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, outNow, pickItems, movementTotals, outstandingQty, setAside, allocated, allocatedTo, lineAmount, quoteSummary, nextInvoiceNo, QUOTE_SECTIONS, inventoryTotals, loadCheck, parseTable, importRows, loadItems, packVehicle, planLoad, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});
+if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, freeFor, outNow, pickItems, movementTotals, outstandingQty, setAside, allocated, allocatedTo, lineAmount, quoteSummary, nextInvoiceNo, QUOTE_SECTIONS, inventoryTotals, loadCheck, parseTable, importRows, loadItems, packVehicle, planLoad, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});

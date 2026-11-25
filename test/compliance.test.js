@@ -206,3 +206,15 @@ test('booking out and in: what to pick, and kit not back yet stays unavailable',
   const bad = structuredClone(s); bad.jobs.at(-1).movements.push({at: 'w', dir: 'in', item: 'IEC cable', qty: 1});
   assert.throws(() => validateState(bad), /more IEC cable booked in than were booked out/);
 });
+
+import {freeFor} from '../public/app/stock.js';
+test('free for a job\'s dates: other bookings at the same time and kit still out count, other days do not', () => {
+  const s = sample(); // Nexo PS10: 4 owned; Summer Fete (1-2 Jul 2026) has 2 reserved
+  const job = {id: 99, title: 'New', start: '2026-07-01T12:00', end: '2026-07-01T20:00', kit: []};
+  assert.equal(freeFor(job, s, 'Nexo PS10'), 2);
+  assert.equal(freeFor({...job, start: '2026-07-05T12:00', end: '2026-07-05T20:00'}, s, 'Nexo PS10'), 4);
+  assert.equal(freeFor({...job, start: '', end: ''}, s, 'Nexo PS10'), 4, 'no dates: nothing is booked out right now');
+  s.jobs[0].movements = [{at: 'x', dir: 'out', item: 'Nexo PS10', qty: 2}];
+  assert.equal(freeFor({...job, start: '', end: ''}, s, 'Nexo PS10'), 2, 'no dates: what is out right now');
+  assert.equal(freeFor(s.jobs[0], s, 'Nexo PS10'), 4, "a job's own bookings don't count against itself");
+});

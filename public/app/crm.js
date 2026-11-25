@@ -62,9 +62,7 @@ function clientAction() {
   newClientJob(activeClient);
 }
 function newClientJob(id) {
-  editingJob = null;
-  draftKit = [];
-  go("Jobs");
+  newJob();
   let f = $("jobForm");
   if (f) f.elements.clientId.value = id;
 }

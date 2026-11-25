@@ -88,6 +88,7 @@ function markPaid(id) {
 }
 // Open the Jobs list showing one stage (or "all" / "active").
 function showJobs(filter) {
+  jobEditorOpen = false;
   jobFilter = filter;
   jobQuery = "";
   editingJob = null;
