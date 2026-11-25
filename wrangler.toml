@@ -20,6 +20,8 @@ OWNER_EMAIL = "huw@hd-events.co.uk"
 CF_ACCOUNT_ID = "ae708f09760121c96fb9b209d13a2ef7"
 ACCESS_APP_ID = "b65f695b-f923-4b93-979b-8ff916dc3093"
 ACCESS_POLICY_ID = "c0156aa8-ab04-4eee-b511-7c05ce13a6de"
+# Google Drive: event folders. Also needs the secret GOOGLE_CLIENT_SECRET (Google Cloud > Clients).
+GOOGLE_CLIENT_ID = "624002218499-vb71lkh2nqn477v2lkmu6594tos47fa2.apps.googleusercontent.com"
 
 [[d1_databases]]
 binding = "DB"

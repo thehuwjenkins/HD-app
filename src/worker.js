@@ -9,6 +9,7 @@ import {whoIs,describe,visibleState,prepareChanges,checkAccessSetting} from './r
 import {syncAccess,accessStatus} from './accesssync.js';
 import {handleCrew} from './crew.js';
 import {handleClientLink} from './clientlink.js';
+import {connectRedirect,finishConnect,googleStatus,disconnect,saveToDrive,eventFolderLink} from './google.js';
 import {STATIC} from './static.gen.js';
 // App code, styles and logo bundled into the worker (see tools/bundle-static.mjs).
 function bundled(path){
@@ -55,7 +56,7 @@ async function api(req,env,url,email,owner){
   if(!owner&&migrated)who=whoIs(env,email,(await loadState(env)).state);
   const member=who.kind==='member';
   if(!owner&&!member)return reply('Forbidden',403);
-  if(member&&!['/api/changes','/api/files','/api/ai/image'].includes(path))return reply('Forbidden',403);
+  if(member&&!['/api/changes','/api/files','/api/ai/image','/api/google/status','/api/google/save'].includes(path))return reply('Forbidden',403);
 
   if(method==='POST'&&path==='/api/migrate'){
     const denied=writeCheck(req,url,owner);if(denied)return denied;
@@ -92,6 +93,26 @@ async function api(req,env,url,email,owner){
     const denied=writeCheck(req,url,owner||who.sections?.includes('planner'));if(denied)return denied;
     return guarded(async()=>{const {prompt}=await readJson(req,10_000);return json({url:await generateImage(env,prompt)});});
   }
+  // Google Drive: the owner connects; the owner and team members with the planner or jobs save event documents.
+  if(path.startsWith('/api/google/'))return guarded(async()=>{
+    if(method==='GET'&&path==='/api/google/connect'&&owner)return connectRedirect(env,url);
+    if(method==='GET'&&path==='/api/google/callback'&&owner)return finishConnect(req,env,url,email);
+    if(method==='GET'&&path==='/api/google/status'){
+      const ref=url.searchParams.get('ref')||'';
+      return json({...await googleStatus(env),folderLink:/^(plan|job):\d{1,20}$/.test(ref)?await eventFolderLink(env,ref):''});
+    }
+    if(method==='POST'&&path==='/api/google/disconnect'){
+      const denied=writeCheck(req,url,owner);if(denied)return denied;
+      await disconnect(env);return json({ok:true});
+    }
+    if(method==='POST'&&path==='/api/google/save'){
+      const item=await readJson(req,3_500_000);
+      const area=String(item?.ref||'').startsWith('job:')?'jobs':'plans';
+      const denied=writeCheck(req,url,owner||(member&&(who.write.has(area)||who.write.has('plans'))));if(denied)return denied;
+      return json(await saveToDrive(env,item));
+    }
+    return reply('Not found',404);
+  });
   if(method==='GET'&&path==='/api/access/status')return json(await accessStatus(env,(await loadState(env)).state));
   if(method==='POST'&&path==='/api/access/sync'){
     const denied=writeCheck(req,url,owner);if(denied)return denied;

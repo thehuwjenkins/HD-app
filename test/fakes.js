@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 
 export function makeD1() {
   const db = new DatabaseSync(':memory:');
-  for (const f of ['0001_workspace.sql', '0002_safety_layer.sql', '0003_tables.sql', '0004_pipeline.sql', '0005_planner.sql', '0006_job_reports.sql', '0007_job_templates.sql']) db.exec(readFileSync(new URL('../migrations/' + f, import.meta.url), 'utf8'));
+  for (const f of ['0001_workspace.sql', '0002_safety_layer.sql', '0003_tables.sql', '0004_pipeline.sql', '0005_planner.sql', '0006_job_reports.sql', '0007_job_templates.sql', '0008_integrations.sql']) db.exec(readFileSync(new URL('../migrations/' + f, import.meta.url), 'utf8'));
   const stmt = (sql, params = []) => ({
     sql, params,
     bind: (...p) => stmt(sql, p),
@@ -35,7 +35,7 @@ export function makeR2() {
   return {
     store,
     async put(key, value, opts = {}) { store.set(key, {text: typeof value === 'string' ? value : null, bytes: typeof value === 'string' ? null : new Uint8Array(value), customMetadata: opts.customMetadata || {}, httpMetadata: opts.httpMetadata || {}, uploaded: new Date()}); },
-    async get(key) { const o = store.get(key); return o ? {text: async () => o.text, body: o.text ?? o.bytes, customMetadata: o.customMetadata, httpMetadata: o.httpMetadata} : null; },
+    async get(key) { const o = store.get(key); return o ? {text: async () => o.text, arrayBuffer: async () => (o.bytes ?? new TextEncoder().encode(o.text)).slice().buffer, body: o.text ?? o.bytes, customMetadata: o.customMetadata, httpMetadata: o.httpMetadata} : null; },
     async head(key) { return store.has(key) ? {} : null; },
     async delete(keys) { for (const k of [].concat(keys)) store.delete(k); },
     async list({prefix = ''} = {}) {

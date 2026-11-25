@@ -33,15 +33,17 @@ const pDate = (d) => (d ? fmtDay(String(d).slice(0, 10), { day: "numeric", month
 const pMoney = (n) => "£" + (Number(n) || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // Open a document in a new tab. Returns the HTML (handy for checks).
+let printCapture = null; // set while building documents for Google Drive
 function printDocument(title, ref, body, { foot = "", lead = "" } = {}) {
   const info = db.company || {};
-  const logo = db.branding?.docLogo || DOC_LOGO;
+  const logo = (printCapture && printCapture.logo) || db.branding?.docLogo || DOC_LOGO;
   const contact = [info.address, [info.phone, info.email].filter(Boolean).join(" · "), info.website].filter(Boolean).map(esc).join("<br>");
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}${ref ? " " + esc(ref) : ""} · ${esc(info.name || "HD Events")}</title><style>${PRINT_CSS}</style></head><body>
   <div class="actions"><button onclick="print()">Print / Save as PDF</button><button class="plain" onclick="close()">Close</button></div>
-  <div class="sheet"><div class="ph"><div><img class="logo" src="${esc(new URL(logo, location.href).href)}" alt="${esc(info.name || "HD Events")}"><div class="co">${contact}</div></div>
+  <div class="sheet"><div class="ph"><div><img class="logo" src="${esc(logo.startsWith("data:") ? logo : new URL(logo, location.href).href)}" alt="${esc(info.name || "HD Events")}"><div class="co">${contact}</div></div>
   <div class="ph-right"><h1>${esc(title.toUpperCase())}</h1>${ref ? `<div>${esc(ref)}</div>` : ""}<div>Printed ${esc(pDate(todayKey()))}</div></div></div>
   ${lead ? `<div class="lead-title">${esc(lead)}</div>` : ""}${body}<div class="foot">${foot || esc(info.name || "HD Events")}${info.companyNumber ? " · Company no. " + esc(info.companyNumber) : ""}${info.vatNumber ? " · VAT no. " + esc(info.vatNumber) : ""}</div></div></body></html>`;
+  if (printCapture) return html; // saving to Google Drive: just the document, no print window
   const w = window.open("", "_blank");
   if (!w) {
     alert("Please allow pop-ups for this site to open printable documents.");

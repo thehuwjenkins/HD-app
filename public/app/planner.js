@@ -160,7 +160,7 @@ function planWorkspace(p) {
   const body = { checklist: planChecklist, site: siteMap, creative: creativeBoard, posters: posterStudio, docs: planDocuments, suppliers: planSuppliers, compliance: planCompliance }[plannerTab] || planChecklist;
   return `<div class="toolbar"><button class="btn small ghost" onclick="plannerId=null;render()">← All plans</button></div>
   <div class="plan-head">${ring(pr.pct, 72)}<div class="grow"><h2>${esc(p.title)}</h2><div class="muted">${p.eventDate ? esc(fmtDay(p.eventDate, { weekday: "long", day: "numeric", month: "long", year: "numeric" })) : "Date not set"}${p.venue ? " · " + esc(p.venue) : ""}${p.capacity ? " · " + p.capacity.toLocaleString("en-GB") + " capacity" : ""}</div>
-  <div class="toolbar" style="margin:8px 0 0">${job ? stageTag(job) + (canSee("Jobs") ? ` <button class="btn small secondary" onclick="openJob(${job.id})">Open job</button>` : "") : ""}<button class="btn small ghost" onclick="editPlanDetails()">Edit details</button><button class="btn small ghost" onclick="profileDialog()">Event profile</button></div></div>
+  <div class="toolbar" style="margin:8px 0 0">${job ? stageTag(job) + (canSee("Jobs") ? ` <button class="btn small secondary" onclick="openJob(${job.id})">Open job</button>` : "") : ""}<button class="btn small ghost" onclick="editPlanDetails()">Edit details</button><button class="btn small ghost" onclick="profileDialog()">Event profile</button>${driveButtons("plan:" + p.id, `savePlanToDrive(${p.id})`, true)}</div></div>
   <div class="countdown"><b>${countdown(p.eventDate)}</b><span>${pr.done} of ${pr.total} done · ${approved}/${docs.length} documents approved</span></div></div>
   <div class="tabs" role="tablist">${PLAN_TABS.map(([k, l]) => `<button role="tab" aria-selected="${k === plannerTab}" class="${k === plannerTab ? "active" : ""}" onclick="plannerTab='${k}';render()">${l}</button>`).join("")}</div>
   <div id="planBody">${body(p)}</div>`;
@@ -434,10 +434,16 @@ function printDoc(id) {
     ok = d.status === "approved";
   const w = window.open("", "_blank");
   if (!w) return alert("Allow pop-ups to print this document.");
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(item.title)} · ${esc(p.title)}</title><style>body{font:13px/1.5 Arial,sans-serif;color:#111;max-width:780px;margin:30px auto;padding:0 20px}h1{font-size:20px;margin:0}.head{display:flex;justify-content:space-between;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:16px}pre{white-space:pre-wrap;font:inherit}.stamp{border:2px solid ${ok ? "#067647" : "#b42318"};color:${ok ? "#067647" : "#b42318"};padding:10px;margin:16px 0;font-weight:bold}.wm{position:fixed;top:40%;left:0;right:0;text-align:center;font-size:70px;color:#b4231822;transform:rotate(-20deg);pointer-events:none}@media print{button{display:none}}</style></head><body>
+  w.document.write(docHtml(p, item));
+  w.document.close();
+}
+// A safety document as a standalone page (printing, and saving to Google Drive).
+function docHtml(p, item) {
+  const d = item.doc,
+    ok = d.status === "approved";
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(item.title)} · ${esc(p.title)}</title><style>body{font:13px/1.5 Arial,sans-serif;color:#111;max-width:780px;margin:30px auto;padding:0 20px}h1{font-size:20px;margin:0}.head{display:flex;justify-content:space-between;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:16px}pre{white-space:pre-wrap;font:inherit}.stamp{border:2px solid ${ok ? "#067647" : "#b42318"};color:${ok ? "#067647" : "#b42318"};padding:10px;margin:16px 0;font-weight:bold}.wm{position:fixed;top:40%;left:0;right:0;text-align:center;font-size:70px;color:#b4231822;transform:rotate(-20deg);pointer-events:none}@media print{button{display:none}}</style></head><body>
   ${ok ? "" : '<div class="wm">DRAFT</div>'}<button onclick="print()">Print / Save as PDF</button>
   <div class="head"><div><h1>${esc(item.title)}</h1>${esc(DOC_LABELS[d.kind])} · ${esc(p.title)}</div><div>${esc(db.company?.name || "HD Events")}<br>${p.eventDate ? esc(fmtDay(p.eventDate, { day: "numeric", month: "long", year: "numeric" })) : ""}</div></div>
   <div class="stamp">${ok ? "APPROVED by " + esc(d.approval.by) + " on " + esc(hqWhen(d.approval.at)) + " · ref " + esc(d.approval.hash) : "DRAFT: NEEDS REVIEW. Not approved for use."}</div>
-  <pre>${esc(d.content || DOC_SKELETONS[d.kind])}</pre></body></html>`);
-  w.document.close();
+  <pre>${esc(d.content || DOC_SKELETONS[d.kind])}</pre></body></html>`;
 }

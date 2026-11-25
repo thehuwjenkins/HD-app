@@ -786,3 +786,4 @@ body { background: var(--bg); }
 .templates { margin: 4px 0 14px; border: 1px solid var(--line, #dfe3ec); border-radius: 14px; padding: 10px 16px; }
 .templates summary { cursor: pointer; font-weight: 600; }
 .templates .line { gap: 12px; flex-wrap: wrap; }
+.drive-progress { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 400; max-width: min(560px, calc(100% - 32px)); padding: 12px 18px; border-radius: 14px; background: #111827; color: #fff; font-size: 14px; box-shadow: 0 10px 30px #0004; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

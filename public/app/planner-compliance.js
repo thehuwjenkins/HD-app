@@ -193,14 +193,19 @@ function printCompliance() {
     pw = powerEstimate(p.suppliers || []);
   const w = window.open("", "_blank");
   if (!w) return alert("Allow pop-ups to print the pack.");
+  w.document.write(complianceHtml(p));
+  w.document.close();
+}
+function complianceHtml(p) {
+  const c = complianceStatus(p),
+    pw = powerEstimate(p.suppliers || []);
   const tr = (ok, a, b) => `<tr><td class="${ok ? "ok" : "no"}">${ok ? "✓" : "✗"}</td><td>${esc(a)}</td><td>${b}</td></tr>`;
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Compliance pack · ${esc(p.title)}</title><style>body{font:13px/1.5 Arial,sans-serif;color:#111;max-width:820px;margin:30px auto;padding:0 20px}h1{font-size:22px;margin:0}h2{font-size:15px;margin:22px 0 6px;border-bottom:1px solid #999}table{width:100%;border-collapse:collapse}td{padding:5px 6px;border-bottom:1px solid #ddd;vertical-align:top}td:first-child{width:24px;font-weight:bold}.ok{color:#067647}.no{color:#b42318}.note{font-size:11px;color:#555;margin-top:24px}@media print{button{display:none}}</style></head><body>
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Compliance pack · ${esc(p.title)}</title><style>body{font:13px/1.5 Arial,sans-serif;color:#111;max-width:820px;margin:30px auto;padding:0 20px}h1{font-size:22px;margin:0}h2{font-size:15px;margin:22px 0 6px;border-bottom:1px solid #999}table{width:100%;border-collapse:collapse}td{padding:5px 6px;border-bottom:1px solid #ddd;vertical-align:top}td:first-child{width:24px;font-weight:bold}.ok{color:#067647}.no{color:#b42318}.note{font-size:11px;color:#555;margin-top:24px}@media print{button{display:none}}</style></head><body>
     <button onclick="print()">Print / Save as PDF</button>
     <h1>${esc(p.title)}: compliance pack</h1><p>${esc(db.company?.name || "HD Events")} · ${p.eventDate ? esc(fmtDay(p.eventDate, { day: "numeric", month: "long", year: "numeric" })) : ""}${p.venue ? " · " + esc(p.venue) : ""}${p.capacity ? " · capacity " + p.capacity.toLocaleString("en-GB") : ""}<br>Printed ${esc(hqWhen(new Date().toISOString()))} · ${c.pct}% complete</p>
     <h2>Safety documents</h2><table>${c.docs.map(({ item: i }) => tr(i.doc.status === "approved", i.title, i.doc.status === "approved" ? "Approved by " + esc(i.doc.approval.by) + ", " + esc(hqWhen(i.doc.approval.at)) + " (ref " + esc(i.doc.approval.hash) + ")" : "DRAFT: needs review")).join("")}</table>
     <h2>Licences, certificates & evidence</h2><table>${c.certs.map(({ item: i }) => tr(i.status === "done" && i.files?.length, i.title, (i.files || []).map((f) => esc(f.name)).join(", ") || "Not filed")).join("")}</table>
     <h2>Suppliers</h2><table>${c.sup.map(({ s, gaps }) => tr(!gaps.length, s.name + " (" + (SUPPLIER_TYPES[s.type] || "Other") + ")", (Number(s.kw) > 0 ? s.kw + " kW · " : "") + (gaps.length ? "Missing: " + gaps.map(esc).join(", ") : "All evidence received"))).join("")}</table>
     <h2>Power estimate</h2><p>${pw.kw ? `Connected load ${pw.kw} kW · estimated demand ${pw.kva} kVA · suggested generator ${pw.size ? pw.size + " kVA" : "specialist (over 1000 kVA)"}` : "No power figures entered."}</p>
-    <p class="note">Planning aid only. Safety documents must be reviewed by a competent person. Temporary electrical systems must be designed, installed and certified by a competent electrician to BS 7909. Check the current Purple Guide (Events Industry Forum), HSE guidance and local authority requirements.</p></body></html>`);
-  w.document.close();
+    <p class="note">Planning aid only. Safety documents must be reviewed by a competent person. Temporary electrical systems must be designed, installed and certified by a competent electrician to BS 7909. Check the current Purple Guide (Events Industry Forum), HSE guidance and local authority requirements.</p></body></html>`;
 }
