@@ -10,6 +10,7 @@ import {syncAccess,accessStatus} from './accesssync.js';
 import {handleCrew} from './crew.js';
 import {handleClientLink} from './clientlink.js';
 import {handlePublicEvents} from './publicevents.js';
+import {handleSignup,listSignups,deleteSignups,LISTS} from './signups.js';
 import {connectRedirect,finishConnect,googleStatus,disconnect,saveToDrive,eventFolderLink} from './google.js';
 import {STATIC} from './static.gen.js';
 // App code, styles and logo bundled into the worker (see tools/bundle-static.mjs).
@@ -57,7 +58,7 @@ async function api(req,env,url,email,owner){
   if(!owner&&migrated)who=whoIs(env,email,(await loadState(env)).state);
   const member=who.kind==='member';
   if(!owner&&!member)return reply('Forbidden',403);
-  if(member&&!['/api/changes','/api/files','/api/ai/image','/api/google/status','/api/google/save'].includes(path))return reply('Forbidden',403);
+  if(member&&!['/api/changes','/api/files','/api/ai/image','/api/google/status','/api/google/save','/api/signups','/api/signups/delete'].includes(path))return reply('Forbidden',403);
 
   if(method==='POST'&&path==='/api/migrate'){
     const denied=writeCheck(req,url,owner);if(denied)return denied;
@@ -114,6 +115,13 @@ async function api(req,env,url,email,owner){
     }
     return reply('Not found',404);
   });
+  // Public sign-ups (register interest): the owner and team members with the Event Planner.
+  if(path==='/api/signups'||path==='/api/signups/delete'){
+    if(!owner&&!who.sections?.includes('planner'))return reply('Forbidden',403);
+    if(method==='GET'){const list=url.searchParams.get('list')||'';return Object.hasOwn(LISTS,list)?json({list,name:LISTS[list],signups:await listSignups(env,list)}):reply('Unknown list',404);}
+    const denied=writeCheck(req,url,owner);if(denied)return denied;
+    return guarded(async()=>json({deleted:await deleteSignups(env,(await readJson(req,100_000)).ids)}));
+  }
   if(method==='GET'&&path==='/api/access/status')return json(await accessStatus(env,(await loadState(env)).state));
   if(method==='POST'&&path==='/api/access/sync'){
     const denied=writeCheck(req,url,owner);if(denied)return denied;
@@ -161,6 +169,7 @@ async fetch(req,env){
   const path0=new URL(req.url).pathname;
   if(path0==='/q/logo.png'){const r=bundled('/logo-print.png');r.headers.set('cache-control','public, max-age=86400');return r;}
   // The website's Events page: events published from HQ, and their posters.
+  if(path0==='/q/signup')return handleSignup(req,env);
   if(path0==='/q/events.json'||path0.startsWith('/q/poster/'))return handlePublicEvents(req,env,new URL(req.url));
   if(path0.startsWith('/q/'))return handleClientLink(req,env,new URL(req.url));
   let email;

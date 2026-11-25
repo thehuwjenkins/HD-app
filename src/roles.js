@@ -10,7 +10,7 @@
 
 export const SECTIONS = {
   overview: {label: 'Overview', pages: ['Overview'], write: [], read: []},
-  planner: {label: 'Event Planner', pages: ['Event Planner'], write: ['plans'], read: ['plans', 'staff']},
+  planner: {label: 'Event Planner', pages: ['Event Planner', 'Sign-ups'], write: ['plans'], read: ['plans', 'staff']},
   jobs: {label: 'Jobs, pipeline & calendar', pages: ['Pipeline', 'Calendar', 'Jobs', 'Cross-hire'], write: ['jobs', 'crewInvites', 'crossHires', 'clients', 'jobReports', 'jobTemplates'], read: ['jobs', 'crewInvites', 'crossHires', 'inventory', 'packages', 'staff', 'clients', 'jobReports', 'jobTemplates']},
   tasks: {label: 'Tasks & projects', pages: ['My Workday', 'Projects'], write: ['tasks', 'projects'], read: ['tasks', 'projects']},
   kit: {label: 'Kit & packages', pages: ['Inventory', 'Packages', 'Cross-hire'], write: ['inventory', 'packages', 'crossHires'], read: ['inventory', 'packages', 'crossHires', 'jobs']},
