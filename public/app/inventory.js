@@ -18,7 +18,7 @@ function inventoryMatches() {
   return db.inventory.filter((i) => (!q || i.name.toLowerCase().includes(q) || (i.notes || "").toLowerCase().includes(q)) && (!inventoryCat || (i.category || "") === inventoryCat));
 }
 // Friendlier names for the departments in drop-downs.
-const DEPT_LABELS = { Visual: "Visual (screens, projection, cameras)", "Stage & Rigging": "Stage & Rigging (truss, staging, hoists)", "Power Distribution": "Power Distribution (distro, cables, generators)", "Labour / Crew": "Labour / Crew", Transport: "Transport (vans, delivery)", Install: "Install" };
+const DEPT_LABELS = { Visual: "Visual (screens, projection, cameras)", Backline: "Backline (drums, amps, instruments)", "Stage & Rigging": "Stage & Rigging (truss, staging, hoists)", "Power Distribution": "Power Distribution (distro, cables, generators)", "Labour / Crew": "Labour / Crew", Transport: "Transport (vans, delivery)", Install: "Install" };
 const inventoryCats = () => [...new Set([...cats, ...db.inventory.map((i) => i.category).filter(Boolean)])];
 function inventory() {
   const t = inventoryTotals(db.inventory);

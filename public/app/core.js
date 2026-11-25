@@ -112,7 +112,7 @@ function stageTag(job) {
   const st = stageOf(job);
   return `<span class="stage" data-stage="${st}">${STAGE_LABELS[st]}</span>`;
 }
-const cats = ["Audio", "Visual", "Lighting", "Stage & Rigging", "Power Distribution", "Transport", "Install", "Labour / Crew"];
+const cats = ["Audio", "Visual", "Lighting", "Backline", "Stage & Rigging", "Power Distribution", "Transport", "Install", "Labour / Crew"];
 const money = (n) => (me.money ? "£" + (Number(n) || 0).toFixed(2) : "—");
 // Crew lines are charged per person per day or hour: people × days/hours × rate. Everything else is qty × price.
 const CREW_CAT = "Labour / Crew";
@@ -127,6 +127,7 @@ function inputTime(value, end) {
 function guessCategory(name) {
   let n = name.toLowerCase();
   if (/truck|van|delivery|transport|mileage|fuel/.test(n)) return "Transport";
+  if (/drum|snare|cymbal|kit\b|guitar|bass amp|combo|amp head|marshall|fender|ashdown|keyboard/.test(n)) return "Backline";
   if (/distro|distribution|16a|32a|63a|125a|ceeform|powercon|iec|extension|cable drum|generator|power/.test(n)) return "Power Distribution";
   if (/rigging|truss|stage|hoist|chain|motor/.test(n)) return "Stage & Rigging";
   if (/light|par |moving head|dimmer|dmx|spotlight/.test(n)) return "Lighting";

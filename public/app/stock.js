@@ -368,7 +368,7 @@ export function importRows(text){
 }
 // ---------- Quote / invoice figures (shared by the app, printouts and the client's quote page) ----------
 export const CREW_CATEGORY='Labour / Crew';
-export const QUOTE_SECTIONS=['Audio','Visual','Lighting','Stage & Rigging','Power Distribution','Transport','Install','Labour / Crew'];
+export const QUOTE_SECTIONS=['Audio','Visual','Lighting','Backline','Stage & Rigging','Power Distribution','Transport','Install','Labour / Crew'];
 // Crew: people × days/hours × rate. Everything else: qty × price.
 export function lineAmount(k){return (Number(k.qty)||0)*(Number(k.price)||0)*((k.category||'')===CREW_CATEGORY?(Number(k.time)||1):1);}
 // Equipment as one total per section; crew itemised; then discount and VAT (20%, only if VAT registered).
