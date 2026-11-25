@@ -9,6 +9,7 @@ import {whoIs,describe,visibleState,prepareChanges,checkAccessSetting} from './r
 import {syncAccess,accessStatus} from './accesssync.js';
 import {handleCrew} from './crew.js';
 import {handleClientLink} from './clientlink.js';
+import {handlePublicEvents} from './publicevents.js';
 import {connectRedirect,finishConnect,googleStatus,disconnect,saveToDrive,eventFolderLink} from './google.js';
 import {STATIC} from './static.gen.js';
 // App code, styles and logo bundled into the worker (see tools/bundle-static.mjs).
@@ -159,6 +160,8 @@ async fetch(req,env){
   // Client quote links (/q/<token>) are public: Cloudflare Access bypasses /q, and the random token is the key.
   const path0=new URL(req.url).pathname;
   if(path0==='/q/logo.png'){const r=bundled('/logo-print.png');r.headers.set('cache-control','public, max-age=86400');return r;}
+  // The website's Events page: events published from HQ, and their posters.
+  if(path0==='/q/events.json'||path0.startsWith('/q/poster/'))return handlePublicEvents(req,env,new URL(req.url));
   if(path0.startsWith('/q/'))return handleClientLink(req,env,new URL(req.url));
   let email;
   try{email=await staffEmail(req,env);}

@@ -148,6 +148,7 @@ const PLAN_TABS = [
   ["site", "Site map"],
   ["creative", "Creative"],
   ["posters", "Posters"],
+  ["website", "Website"],
   ["docs", "Safety documents"],
   ["suppliers", "Suppliers & power"],
   ["compliance", "Compliance"],
@@ -157,7 +158,7 @@ function planWorkspace(p) {
     job = planJob(p);
   const docs = planDocs(p),
     approved = docs.filter((x) => x.item.doc.status === "approved").length;
-  const body = { checklist: planChecklist, site: siteMap, creative: creativeBoard, posters: posterStudio, docs: planDocuments, suppliers: planSuppliers, compliance: planCompliance }[plannerTab] || planChecklist;
+  const body = { checklist: planChecklist, site: siteMap, creative: creativeBoard, posters: posterStudio, website: planWebsite, docs: planDocuments, suppliers: planSuppliers, compliance: planCompliance }[plannerTab] || planChecklist;
   return `<div class="toolbar"><button class="btn small ghost" onclick="plannerId=null;render()">← All plans</button></div>
   <div class="plan-head">${ring(pr.pct, 72)}<div class="grow"><h2>${esc(p.title)}</h2><div class="muted">${p.eventDate ? esc(fmtDay(p.eventDate, { weekday: "long", day: "numeric", month: "long", year: "numeric" })) : "Date not set"}${p.venue ? " · " + esc(p.venue) : ""}${p.capacity ? " · " + p.capacity.toLocaleString("en-GB") + " capacity" : ""}</div>
   <div class="toolbar" style="margin:8px 0 0">${job ? stageTag(job) + (canSee("Jobs") ? ` <button class="btn small secondary" onclick="openJob(${job.id})">Open job</button>` : "") : ""}<button class="btn small ghost" onclick="editPlanDetails()">Edit details</button><button class="btn small ghost" onclick="profileDialog()">Event profile</button>${driveButtons("plan:" + p.id, `savePlanToDrive(${p.id})`, true)}</div></div>
