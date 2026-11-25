@@ -224,6 +224,8 @@ textarea.field { resize: vertical; }
 .package-choice { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--border); padding: 7px; }
 .package-choice .field { width: 90px; }
 .package-choice span { font-size: 13px; }
+.pkg-choice-ctl { display: flex; align-items: center; gap: 10px; flex: none; }
+.pkg-free { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); cursor: pointer; white-space: nowrap; }
 
 /* ---------- History & backups dialog ---------- */
 #hqSafety { position: fixed; inset: 0; background: #060b15e0; z-index: 1000; overflow: auto; padding: 5vh 12px; }

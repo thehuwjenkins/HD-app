@@ -26,6 +26,28 @@ export function allocated(inventory,name){
 export function allocatedTo(inventory,name){
   const out=[];for(const i of inventory||[])for(const a of i.accessories||[])if(a.item===name)out.push({main:i.name,qty:(Number(a.qty)||0)*(Number(i.qty)||0)});return out;
 }
+// A package's pricing. Items marked free (e.g. the flight case two PS10s travel in) are included at no
+// charge. A package can have its own hire price; otherwise it is the sum of its chargeable items. On a job
+// each line still carries its own unit price (scaled so the lines add up to the package price), so section
+// totals, quotes and invoices stay right. Each item keeps its own replacement value either way.
+export function packagePricing(pkg,inventory=[]){
+  const r2=n=>Math.round(n*100)/100;
+  const lines=(pkg?.items||[]).map(k=>({qty:Number(k.qty)||0,free:!!k.free,item:inventory.find(i=>String(i.id)===String(k.id))})).filter(x=>x.item&&x.qty>0);
+  const paid=lines.filter(x=>!x.free);
+  const itemsPrice=r2(paid.reduce((s,x)=>s+x.qty*(Number(x.item.price)||0),0));
+  const fixed=pkg?.price!==undefined&&pkg?.price!==null&&pkg?.price!==''&&Number.isFinite(Number(pkg.price));
+  const price=fixed?r2(Number(pkg.price)):itemsPrice;
+  for(const x of lines)x.unit=x.free?0:Number(x.item.price)||0;
+  if(fixed&&paid.length){
+    if(itemsPrice>0){const f=price/itemsPrice;for(const x of paid)x.unit=r2(x.unit*f);}
+    else{for(const x of paid)x.unit=0;paid[0].unit=r2(price/paid[0].qty);}
+    // Put any rounding pennies on one line (a single-unit line if there is one), so the lines add up exactly.
+    const diff=r2(price-paid.reduce((s,x)=>s+x.qty*x.unit,0));
+    if(diff){const one=paid.find(x=>x.qty===1)||paid[0];one.unit=Math.round((one.unit+diff/one.qty)*10000)/10000;}
+  }
+  const value=r2(lines.reduce((s,x)=>s+x.qty*(Number(x.item.value)||0),0));
+  return {lines,itemsPrice,price,fixed,value,units:lines.reduce((s,x)=>s+x.qty,0)};
+}
 // Packages marked "keep this kit together" (e.g. a built PA rack): their contents are always set aside
 // from hire stock, and the package itself can be on only one booked job at a time.
 export function setAside(state,name){
@@ -171,6 +193,10 @@ export function validate(state) {
         if(!Number.isSafeInteger(a.qty)||a.qty<1||a.qty>100)throw Error(item.name+' — accessory quantity must be 1 to 100');
       }
     }
+  }
+  for(const p of state.packages||[]){
+    if(p.price!==undefined&&p.price!==null&&p.price!==''&&!(Number(p.price)>=0&&Number(p.price)<=1000000))throw Error(String(p.name)+' — package price must be a number from 0 to 1000000');
+    for(const k of p.items||[])if(k.free!==undefined&&typeof k.free!=='boolean')throw Error(String(p.name)+' — invalid included item');
   }
   for(const item of state.inventory){
     const kept=setAside(state,item.name);
