@@ -205,8 +205,9 @@ export function validate(state) {
   for(const job of state.jobs){
     if(job.payments!==undefined){
       if(!Array.isArray(job.payments))throw Error(String(job.title)+' — invalid payments');
-      for(const p of job.payments)if(!p||!(Number(p.amount)>0)||!(Number(p.fee||0)>=0)||typeof p.at!=='string')throw Error(String(job.title)+' — invalid payment entry');
+      for(const p of job.payments)if(!p||!(Number(p.amount)>0)||!(Number(p.fee||0)>=0)||typeof p.at!=='string'||(p.kind!==undefined&&!['payment','deposit','refund'].includes(p.kind)))throw Error(String(job.title)+' — invalid payment entry');
     }
+    for(const f of ['discountPct','depositPct'])if(job[f]!==undefined&&job[f]!==''&&!(Number(job[f])>=0&&Number(job[f])<=100))throw Error(String(job.title)+' — '+(f==='depositPct'?'deposit':'discount')+' % must be 0 to 100');
     if(job.terms!==undefined&&!['hire','install','none'].includes(job.terms))throw Error(String(job.title)+' — invalid terms choice');
     if(job.movements!==undefined){
       if(!Array.isArray(job.movements))throw Error(String(job.title)+' — invalid booking out / in log');
@@ -410,7 +411,10 @@ export function quoteSummary(job,{vatRegistered=false}={}){
   const order=c=>(QUOTE_SECTIONS.indexOf(c)+1)||99;
   const totals=[...sums].sort(([a],[b])=>order(a)-order(b)).map(([name,total])=>({name,total:Math.round(total*100)/100})).filter(x=>x.total>0);
   const crew=(job.kit||[]).filter(k=>(k.category||'')===CREW_CATEGORY&&lineAmount(k)>0).map(k=>({role:k.item,people:Number(k.qty)||0,time:Number(k.time)||1,unit:k.unit==='hour'?'hour':'day',rate:Number(k.price)||0,total:Math.round(lineAmount(k)*100)/100}));
-  const sub=Math.round(totals.reduce((s,x)=>s+x.total,0)*100)/100,discount=Math.min(sub,Number(job.discount)||0),net=Math.round((sub-discount)*100)/100;
+  const sub=Math.round(totals.reduce((s,x)=>s+x.total,0)*100)/100;
+  // A fixed £ discount plus a % discount (e.g. a client's standing discount).
+  const pct=Math.min(100,Math.max(0,Number(job.discountPct)||0));
+  const discount=Math.min(sub,Math.round(((Number(job.discount)||0)+sub*pct/100)*100)/100),net=Math.round((sub-discount)*100)/100;
   const vat=vatRegistered?Math.round(net*20)/100:0;
   return {totals,sections:totals.filter(x=>x.name!==CREW_CATEGORY),crew,sub,discount,net,vat,gross:Math.round((net+vat)*100)/100};
 }
@@ -441,11 +445,34 @@ export function cardFee(amount,company={},client={}){
   const charge=Math.ceil(((amount+fixed)/(1-pct/100))*100)/100;
   return Math.round((charge-amount)*100)/100;
 }
-// What has been paid against the invoice (fees excluded) and what is still due.
-export function paymentStatus(job,{vatRegistered=false}={}){
+// Where a job's money stands. Payments (card, bank transfer, cash) add up; refunds take away; card fees
+// are never counted towards the invoice. A deposit is a % of the total due when the job is booked; the
+// balance is due a number of days before the event (company.balanceDays, default 7).
+// Jobs marked paid before payments were recorded (paidAt, no payments) count as paid in full.
+export const PAYMENT_STATUSES=['Payment due','Deposit due','Part paid','Paid','Overpaid','No charge'];
+export function paymentStatus(job,{vatRegistered=false,company={}}={}){
+  const r2=n=>Math.round(n*100)/100;
   const total=quoteSummary(job,{vatRegistered}).gross;
-  const paid=Math.round((job.payments||[]).reduce((s,p)=>s+(Number(p.amount)||0),0)*100)/100;
-  return {total,paid,due:Math.max(0,Math.round((total-paid)*100)/100),fully:!!job.paidAt||(total>0&&paid>=total-0.005)};
+  const list=job.payments||[];
+  let paid=r2(list.reduce((s,p)=>s+(p.kind==='refund'?-1:1)*(Number(p.amount)||0),0));
+  if(!list.length&&job.paidAt)paid=total;
+  const pct=Math.min(100,Math.max(0,Number(job.depositPct)||0));
+  const deposit=r2(total*pct/100);
+  const days=Number.isFinite(Number(company.balanceDays))&&company.balanceDays!==''?Number(company.balanceDays):7;
+  const start=/^\d{4}-\d\d-\d\d/.test(job.start||'')?job.start.slice(0,10):'';
+  const balanceDate=start?new Date(Date.parse(start+'T12:00:00Z')-days*86400000).toISOString().slice(0,10):'';
+  const fully=total>0?paid>=total-0.005:!!job.paidAt;
+  const status=total<=0?'No charge':paid>total+0.005?'Overpaid':fully?'Paid':paid>0.005?(paid<deposit-0.005?'Deposit due':'Part paid'):deposit>0?'Deposit due':'Payment due';
+  return {total,paid,due:Math.max(0,r2(total-paid)),deposit,depositOwed:Math.max(0,r2(deposit-paid)),balanceDate,fully,status,overpaid:Math.max(0,r2(paid-total))};
+}
+// The job with a payment added (or removed), and paidAt kept in step with whether it is now paid in full.
+export function withPayments(job,payments,opts={}){
+  const next={...job,payments};
+  if(!payments.length)delete next.payments;
+  const ps=paymentStatus({...next,paidAt:undefined},opts);
+  if(ps.fully&&ps.total>0)next.paidAt=job.paidAt&&paymentStatus({...job},opts).fully?job.paidAt:new Date().toISOString();
+  else delete next.paidAt;
+  return next;
 }
 // ---------- Terms of hire ----------
 export const TERMS_KINDS={hire:'Terms of Hire',install:'Installation Agreement'};
@@ -465,4 +492,4 @@ export function jobTerms(job,company={},client={}){
   return {kind,title:String(company[kind==='install'?'termsInstallTitle':'termsHireTitle']||'').trim()||TERMS_KINDS[kind],text};
 }
 // Shared with the browser: the owner page loads this file as a module and uses the same checks.
-if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, freeFor, outNow, pickItems, movementTotals, outstandingQty, setAside, allocated, allocatedTo, lineAmount, quoteSummary, nextInvoiceNo, packagePricing, cardFee, paymentStatus, TERMS_KINDS, jobTerms, QUOTE_SECTIONS, inventoryTotals, loadCheck, parseTable, importRows, loadItems, packVehicle, planLoad, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});
+if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, freeFor, outNow, pickItems, movementTotals, outstandingQty, setAside, allocated, allocatedTo, lineAmount, quoteSummary, nextInvoiceNo, packagePricing, cardFee, paymentStatus, PAYMENT_STATUSES, withPayments, TERMS_KINDS, jobTerms, QUOTE_SECTIONS, inventoryTotals, loadCheck, parseTable, importRows, loadItems, packVehicle, planLoad, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});

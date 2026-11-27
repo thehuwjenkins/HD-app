@@ -796,3 +796,24 @@ body { background: var(--bg); }
 .web-posters img { display: block; width: 100%; aspect-ratio: 5/7; object-fit: contain; background: #111; }
 .web-posters figcaption, .web-poster-pick span { display: block; padding: 6px; font-size: 12.5px; }
 .web-poster-pick { cursor: pointer; } .web-poster-pick:hover { border-color: #6d5dfc; }
+.pay-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 14px 0; }
+.pay-summary > div { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.pay-summary b { font-size: 18px; }
+@media (max-width: 640px) { .pay-summary { grid-template-columns: 1fr 1fr; } }
+.job-money { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
+.job-money .field { width: 100%; }
+.board-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.board-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.board-cols h3 { margin: 6px 0 10px; }
+.board-card.done { opacity: .65; }
+.board-late { border: 1px solid #f5c2bd; background: #fff6f5; border-radius: 14px; padding: 6px 14px 10px; margin-bottom: 16px; }
+.board-late h3 { margin: 8px 0 4px; }
+@media (max-width: 900px) { .board-cols { grid-template-columns: 1fr; } }
+.job-tabs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 14px 0 10px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+.job-tabs [role=tab] { border: 0; background: transparent; font: inherit; font-weight: 600; padding: 8px 12px; border-radius: 10px; cursor: pointer; color: var(--muted); }
+.job-tabs [role=tab] span { font-size: 12px; background: var(--border); border-radius: 10px; padding: 1px 7px; margin-left: 4px; }
+.job-tabs [role=tab].active { background: var(--ink, #0f1630); color: #fff; }
+.job-tabs [role=tab].active span { background: #ffffff30; }
+.job-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 0 0 14px; }
+.job-tiles > div { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.job-tiles b { font-size: 20px; }

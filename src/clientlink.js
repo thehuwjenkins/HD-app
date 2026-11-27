@@ -84,17 +84,20 @@ function render(state, job, msg = '') {
   const terms = jobTerms(job, co, c);
   const signed = job.termsAgreed ? `<p class="signed">${e(job.termsAgreed.title)} agreed electronically by <b>${e(job.termsAgreed.name)}</b> on ${e(stamp(job.termsAgreed.at))}. <a href="/q/${job.quoteToken}/terms">View or print the signed terms</a></p>` : '';
   if (isInvoice) {
-    const ps = paymentStatus(job, {vatRegistered: !!co.vatNumber});
-    const payments = (job.payments || []).length ? `<table class="totals"><tbody>${job.payments.map((p) => `<tr><td>Paid ${e(day(p.at))}${p.method === 'card' ? ' by card' : ''}</td><td class="num">−${money(p.amount)}</td></tr>`).join('')}<tr class="grand"><td>Still to pay</td><td class="num">${money(ps.due)}</td></tr></tbody></table>` : '';
+    const ps = paymentStatus(job, {vatRegistered: !!co.vatNumber, company: co});
+    const payments = (job.payments || []).length ? `<table class="totals"><tbody>${job.payments.map((p) => p.kind === 'refund' ? `<tr><td>Refunded ${e(day(p.at))}</td><td class="num">+${money(p.amount)}</td></tr>` : `<tr><td>${p.kind === 'deposit' ? 'Deposit paid' : 'Paid'} ${e(day(p.at))}${p.method === 'card' ? ' by card' : p.method === 'bank' ? ' by bank transfer' : ''}</td><td class="num">−${money(p.amount)}</td></tr>`).join('')}<tr class="grand"><td>Still to pay</td><td class="num">${money(ps.due)}</td></tr></tbody></table>` : '';
     if (ps.fully) {
       after = `${payments}<p class="ok">Paid in full. Thank you!</p>`;
     } else {
+      const schedule = ps.depositOwed > 0 ? `<div class="note"><b>Deposit of ${money(ps.depositOwed)} due now</b> to secure your booking.${ps.balanceDate ? `\nBalance of ${money(Math.max(0, ps.due - ps.depositOwed))} due by ${e(day(ps.balanceDate))}.` : ''}</div>` : ps.balanceDate && ps.paid > 0 ? `<div class="note">Balance of <b>${money(ps.due)}</b> due by ${e(day(ps.balanceDate))}.</div>` : '';
       const card = stripeEnabled && ps.due > 0 ? (() => {
-        const ch = cardCharge(state, job);
-        return `<div class="pay"><h2 style="margin-top:0">Pay by card</h2><p>Pay securely by card, Apple Pay or Google Pay.${ch.fee ? ` A card processing fee of <b>${money(ch.fee)}</b> is added, so the card payment is <b>${money(ch.total)}</b>. Bank transfer has no fee.` : ''}</p>
-        <form method="post" action="/q/${job.quoteToken}/pay"><button>Pay ${money(ch.total)} by card</button></form><p class="small">Payments are handled by Stripe. We never see your card details.</p></div>`;
+        const full = cardCharge(state, job, 'full'), dep = ps.depositOwed > 0 && ps.depositOwed < ps.due ? cardCharge(state, job, 'deposit') : null;
+        const btn = (ch, part, label) => `<form method="post" action="/q/${job.quoteToken}/pay" style="display:inline-block;margin:10px 10px 0 0"><input type="hidden" name="part" value="${part}"><button${part === 'full' && dep ? ' class="plain"' : ''}>${label} ${money(ch.total)}</button></form>`;
+        const fee = (dep || full).fee;
+        return `<div class="pay"><h2 style="margin-top:0">Pay by card</h2><p>Pay securely by card, Apple Pay or Google Pay.${fee ? ' A card processing fee is included in the amounts below. Bank transfer has no fee.' : ''}</p>
+        ${dep ? btn(dep, 'deposit', 'Pay deposit') : ''}${btn(full, 'full', dep ? 'Pay in full' : 'Pay')}<p class="small">Payments are handled by Stripe. We never see your card details.</p></div>`;
       })() : '';
-      after = `${payments}${card}<h2>${card ? 'Or pay by bank transfer' : 'How to pay'}</h2><div class="note">${co.bankDetails ? e(co.bankDetails) : 'Payment details will follow from ' + e(co.name || 'HD Events') + '.'}
+      after = `${payments}${schedule}${card}<h2>${card ? 'Or pay by bank transfer' : 'How to pay'}</h2><div class="note">${co.bankDetails ? e(co.bankDetails) : 'Payment details will follow from ' + e(co.name || 'HD Events') + '.'}
 Please use ${e(job.invoiceNo)} as the payment reference.${co.paymentTerms ? '\n' + e(co.paymentTerms) : ''}${co.vatNumber ? '' : '\nNot VAT registered: no VAT has been charged.'}</div>`;
     }
     const docs = ps.fully ? clientDocs(co) : [];
@@ -148,7 +151,7 @@ export async function handleClientLink(req, env, url) {
     if (action === 'terms') return job.termsAgreed ? page(termsPage(state, job)) : back();
     if (action === 'doc') {
       const d = clientDocs(state.company || {}).find((x) => x.i === Number(docNo));
-      if (!job.invoiceNo || !paymentStatus(job, {vatRegistered: !!state.company?.vatNumber}).fully || !d || !env.FILES) return page(shell('Not available', '<p>This document is available once the invoice is paid.</p>'), 404);
+      if (!job.invoiceNo || !paymentStatus(job, {vatRegistered: !!state.company?.vatNumber, company: state.company || {}}).fully || !d || !env.FILES) return page(shell('Not available', '<p>This document is available once the invoice is paid.</p>'), 404);
       const obj = await env.FILES.get(String(d.url).replace(/^\/files\//, ''));
       if (!obj) return page(shell('Not found', '<p>This document could not be found. Please contact HD Events.</p>'), 404);
       const ext = (/\.(\w+)$/.exec(d.url) || [])[1] || 'pdf';
@@ -158,7 +161,8 @@ export async function handleClientLink(req, env, url) {
     if (action === 'pay') {
       if (req.method !== 'POST' || !sameSite(req, url)) return page('Forbidden', 403);
       if (!stripeEnabled || !job.invoiceNo) return back();
-      const s = await createCheckout(env, state, job, url.origin);
+      const part = String((await req.formData().catch(() => null))?.get('part') || '') === 'deposit' ? 'deposit' : 'full';
+      const s = await createCheckout(env, state, job, url.origin, part);
       await rememberSession(env, job.id, s.id);
       return Response.redirect(s.url, 303);
     }
@@ -172,7 +176,7 @@ export async function handleClientLink(req, env, url) {
       if (stripeEnabled && (job.cardSessions || []).length && await confirmSessions(env, job.id, job.cardSessions.map((x) => x.id)).catch(() => 0)) {
         ({state} = await loadState(env)); job = findJob(state, token);
       }
-      const msg = url.searchParams.get('accepted') ? 'Thank you. Your acceptance has been recorded.' : url.searchParams.get('paid') ? (paymentStatus(job, {vatRegistered: !!state.company?.vatNumber}).fully ? 'Thank you. Your payment has been received.' : 'Thank you. If your card payment went through it will show here within a few minutes.') : '';
+      const msg = url.searchParams.get('accepted') ? 'Thank you. Your acceptance has been recorded.' : url.searchParams.get('paid') ? (paymentStatus(job, {vatRegistered: !!state.company?.vatNumber, company: state.company || {}}).fully ? 'Thank you. Your payment has been received.' : 'Thank you. If your card payment went through it will show here within a few minutes.') : '';
       return page(render(state, job, msg));
     }
     if (req.method !== 'POST' || !sameSite(req, url)) return page('Forbidden', 403);

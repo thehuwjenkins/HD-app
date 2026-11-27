@@ -32,6 +32,8 @@ async function setup(extra = {}) {
   s.inventory[0].price = 45;
   s.jobs[0].kit[0].price = 45;
   s.jobs[0].discount = 10;
+  Object.assign(s.jobs[0], {depositPct: 50, payments: [{at: '2026-06-01T12:00:00.000Z', amount: 40, method: 'bank', kind: 'deposit'}]});
+  s.clients[0].discountPct = 5;
   s.crewInvites.push({id: 40, jobId: 30, staffId: 10, fee: 150});
   const content = 'Risk assessment text';
   s.plans.push({id: 50, jobId: 30, title: 'Summer Fete plan', stages: [{key: 'risk', name: 'Risk', items: [
@@ -80,13 +82,18 @@ test('without money, prices are hidden but kept when the partner saves a job', a
   assert.equal(job.kit[0].price, undefined);
   assert.equal(b.state.inventory[0].price, undefined);
   assert.equal(b.state.crewInvites[0].fee, undefined);
+  assert.equal(job.payments, undefined);
+  assert.equal(job.depositPct, undefined);
+  assert.equal(b.state.clients[0].discountPct, undefined);
   // Julian renames the job and adds a line; trying to set a price or discount is ignored.
-  const edited = {...job, title: 'Summer Fete 2026', discount: 0, kit: [...job.kit, {item: 'XLR 10m', qty: 4, price: 1}]};
+  const edited = {...job, title: 'Summer Fete 2026', discount: 0, payments: [], depositPct: 0, kit: [...job.kit, {item: 'XLR 10m', qty: 4, price: 1}]};
   const r = await call(env, JULIAN, 'POST', '/api/changes', {changes: [{collection: 'jobs', id: 30, op: 'put', version: b.versions.jobs[30], data: edited}]});
   assert.equal(r.status, 200, await r.clone().text());
   const full = (await boot(await call(env, OWNER, 'GET', '/'))).state.jobs[0];
   assert.equal(full.title, 'Summer Fete 2026');
   assert.equal(full.discount, 10);
+  assert.equal(full.depositPct, 50);
+  assert.deepEqual(full.payments.map((p) => p.amount), [40], 'payments survive a save by someone who cannot see them');
   assert.equal(full.kit[0].price, 45);
   assert.equal(full.kit[1].price, undefined, 'new line takes the list price, which XLR does not have');
 });

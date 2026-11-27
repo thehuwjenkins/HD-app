@@ -37,7 +37,7 @@ let draftKit = [];
 let tab = "Overview";
 // Navigation, grouped. [name]
 const navGroups = [
-  ["Work", [["Overview"], ["Event Planner"], ["Sign-ups"], ["Pipeline"], ["Calendar"], ["Jobs"], ["My Workday"]]],
+  ["Work", [["Overview"], ["Event Planner"], ["Sign-ups"], ["Pipeline"], ["Out & back"], ["Calendar"], ["Jobs"], ["My Workday"]]],
   ["Resources", [["Inventory"], ["Packages"], ["Cross-hire"], ["Staff"], ["Crew Portal"]]],
   ["Business", [["CRM"], ["Projects"], ["Branding"], ["People & access"]]],
 ];
@@ -46,7 +46,7 @@ const tabs = navGroups.flatMap(([, items]) => items);
 const SECTION_PAGES = {
   overview: ["Overview"],
   planner: ["Event Planner", "Sign-ups"],
-  jobs: ["Pipeline", "Calendar", "Jobs", "Cross-hire"],
+  jobs: ["Pipeline", "Out & back", "Calendar", "Jobs", "Cross-hire"],
   tasks: ["My Workday", "Projects"],
   kit: ["Inventory", "Packages", "Cross-hire"],
   people: ["Staff", "Crew Portal", "CRM"],
@@ -73,6 +73,7 @@ const pages = {
   "Event Planner": ["Plan an event from idea to derig: checklist, site map, creative, posters and safety documents.", () => planner()],
   "Sign-ups": ["People who registered interest on the Aberavon Beach Fest page.", () => signupsPage()],
   Pipeline: ["Every job from first enquiry to invoice. Move a job along as it progresses.", () => pipeline()],
+  "Out & back": ["What's going out and coming back, day by day, with late returns and a crew run sheet.", () => dayBoard()],
   Calendar: ["Jobs, crew and kit by day.", () => calendar()],
   Jobs: ["Create jobs, build the kit list and quote.", () => jobs()],
   "My Workday": ["Keep the next action visible. Tick things off as you go.", () => workday()],

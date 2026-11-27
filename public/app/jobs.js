@@ -66,7 +66,7 @@ function jobEditor() {
   <div class="jw-top"><button type="button" class="btn small ghost" onclick="cancelEdit()">← All jobs</button><h2>${editingJob ? "Edit job · " + esc(j.title) : jobFromTemplate ? "New job from template · " + esc(jobFromTemplate.name) : "New job"}</h2>${editingJob ? stageTag(j) : ""}<span class="grow"></span>${canWrite("jobTemplates") ? `<button class="btn secondary" type="button" onclick="saveAsTemplate()">Save as template</button>` : ""}<button class="btn secondary" type="button" onclick="cancelEdit()">Cancel</button><button class="btn" type="submit">${editingJob ? "Save changes" : "Save job"}</button></div>
   <section class="jw-details panel"><h3 class="jw-full">Job details</h3>
     <label><span class="muted">Job name</span><input class="field" name="title" required value="${esc(j.title || "")}" placeholder="e.g. Brangwyn Hall awards"></label>
-    <label><span class="muted">Client</span><select class="field" name="clientId">${clientOptions(j.clientId)}</select><button type="button" class="btn small secondary" style="margin-top:6px" onclick="quickClient()">+ Create client</button></label>
+    <label><span class="muted">Client</span><select class="field" name="clientId" onchange="applyClientDefaults(this.value)">${clientOptions(j.clientId)}</select><button type="button" class="btn small secondary" style="margin-top:6px" onclick="quickClient()">+ Create client</button></label>
     <label><span class="muted">Venue / address</span><input class="field" name="venue" value="${esc(j.venue || "")}"></label>
     <label><span class="muted">Collect / prep from</span><input class="field" type="datetime-local" name="start" value="${esc(inputTime(j.start, false))}"></label>
     <label><span class="muted">Return by</span><input class="field" type="datetime-local" name="end" value="${esc(inputTime(j.end, true))}"></label>
@@ -83,7 +83,7 @@ function jobEditor() {
   </section>
   <section class="jw-list"><div class="panel jw-sticky"><div class="line" style="border:0;padding-top:0"><h3 style="margin:0">This job</h3><span class="muted" id="kitCount"></span></div>
     <div id="kitRows">${kitRows()}</div>
-    <label class="money-only" style="display:block;margin:12px 0"><span class="muted">Job discount (£)</span><input class="field" style="max-width:170px" type="number" name="discount" min="0" step="0.01" value="${Number(j.discount) || 0}" oninput="refreshKit()"></label>
+    <div class="money-only job-money"><label><span class="muted">Discount (£)</span><input class="field" type="number" name="discount" min="0" step="0.01" value="${Number(j.discount) || 0}" oninput="refreshKit()"></label><label><span class="muted">Discount %</span><input class="field" type="number" name="discountPct" min="0" max="100" step="0.5" value="${jobDefault(j, "discountPct")}" oninput="refreshKit()"></label><label><span class="muted">Deposit %</span><input class="field" type="number" name="depositPct" min="0" max="100" step="5" value="${jobDefault(j, "depositPct")}"></label></div>
     <div id="quoteTotals">${quoteTotals(draftKit)}</div>
     ${vehiclePicker(j)}<div id="loadResult">${loadResult(j.vehicleIds || [])}</div>${vehicleList().length ? `<button type="button" class="btn small secondary" style="margin-top:10px" onclick="openLoadPlanner()">Plan the van load</button>` : ""}
     <p class="hint">Unit prices stay internal: quotes and invoices show a total per equipment section, with crew itemised.</p>
@@ -166,6 +166,23 @@ function setKitField(n, field, value) {
   else draftKit[n][field] = field === "qty" ? Math.max(1, Number(value) || 1) : Math.max(0, Number(value) || 0);
   refreshKit();
 }
+// Discount % and deposit % for the job form: the job's own, else (new jobs) the client's or the company default.
+function jobDefault(j, f) {
+  if (j[f] !== undefined && j[f] !== "") return Number(j[f]) || 0;
+  if (editingJob) return 0;
+  const c = db.clients.find((x) => String(x.id) === String(j.clientId));
+  if (c && hasNum(c[f])) return Number(c[f]);
+  return f === "depositPct" && hasNum(db.company?.depositPct) ? Number(db.company.depositPct) : 0;
+}
+// Choosing a client fills in their standing discount and deposit (you can still change them).
+function applyClientDefaults(id) {
+  const f = $("jobForm"), c = db.clients.find((x) => String(x.id) === String(id));
+  if (!f || !c) return;
+  if (hasNum(c.discountPct)) f.discountPct.value = Number(c.discountPct);
+  if (hasNum(c.depositPct)) f.depositPct.value = Number(c.depositPct);
+  else if (hasNum(db.company?.depositPct)) f.depositPct.value = Number(db.company.depositPct);
+  refreshKit();
+}
 function quoteTotals(lines) {
   let totals = cats.map((c) => ({
     c,
@@ -178,7 +195,10 @@ function quoteTotals(lines) {
     .map((x) => row(esc(x.c), money(x.total)))
     .join(
       "",
-    )}<div class="line"><b>Total</b><b>${money(totals.reduce((s, x) => s + x.total, 0))}</b></div></div>`;
+    )}${(() => {
+      const f = $("jobForm"), q = quoteSummary({ kit: lines, discount: f ? Number(f.discount?.value) || 0 : 0, discountPct: f ? Number(f.discountPct?.value) || 0 : 0 }, { vatRegistered: !!db.company?.vatNumber });
+      return (q.discount ? row("Discount", "−" + money(q.discount)) : "") + `<div class="line"><b>Total${q.vat ? " inc VAT" : ""}</b><b>${money(q.gross)}</b></div>`;
+    })()}</div>`;
 }
 function refreshKit() {
   $("kitRows").innerHTML = kitRows();
@@ -218,10 +238,52 @@ function refreshLoad() {
   if (el) el.innerHTML = loadResult(chosenVehicles());
 }
 let jobFilter = "active",
-  jobQuery = "";
+  jobQuery = "",
+  jobPay = "";
+const jobPayStatus = (j) => (!j.invoiceNo ? "Not invoiced" : payStatus(j).status);
+// The jobs shown: the stage tab, the search box and (money only) the payment status filter.
+function filteredJobs() {
+  const q = jobQuery.toLowerCase();
+  return jobsIn(jobFilter)
+    .filter((j) => !q || [j.title, j.client, j.venue, j.invoiceNo].join(" ").toLowerCase().includes(q))
+    .filter((j) => !jobPay || !me.money || jobPayStatus(j) === jobPay)
+    .sort((a, b) => (a.start || "9999").localeCompare(b.start || "9999"));
+}
+function refreshJobList() {
+  $("jobList").innerHTML = jobList();
+  $("jobTiles").innerHTML = jobTiles();
+}
+function jobTiles() {
+  const list = filteredJobs();
+  const items = list.reduce((n, j) => n + (j.kit || []).filter((k) => !isCrewLine(k)).reduce((m, k) => m + (Number(k.qty) || 0), 0), 0);
+  const tile = (l, v) => `<div><span class="muted">${l}</span><b>${v}</b></div>`;
+  return `<div class="job-tiles">${tile("Jobs", list.length)}${tile("Items", items)}${me.money ? tile("Value", money(list.reduce((s, j) => s + quoteSummary(j, payOpts()).gross, 0))) + tile("Amount due", money(list.filter((j) => j.invoiceNo).reduce((s, j) => s + payStatus(j).due, 0))) : ""}</div>`;
+}
+// Spreadsheet of the jobs currently shown.
+function exportJobsCsv() {
+  const cell = (v) => {
+    let t = String(v ?? "");
+    if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; // keep spreadsheet formulas out
+    return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+  };
+  const head = ["Job", "Client", "Venue", "Start", "End", "Stage", "Items", ...(me.money ? ["Total", "Invoice", "Payment status", "Paid", "Due"] : [])];
+  const rows = filteredJobs().map((j) => {
+    const ps = me.money ? payStatus(j) : null;
+    return [j.title, j.client, j.venue, j.start, j.end, STAGE_LABELS[stageOf(j)], (j.kit || []).filter((k) => !isCrewLine(k)).reduce((m, k) => m + (Number(k.qty) || 0), 0), ...(me.money ? [ps.total.toFixed(2), j.invoiceNo || "", jobPayStatus(j), ps.paid.toFixed(2), j.invoiceNo ? ps.due.toFixed(2) : ""] : [])];
+  });
+  const csv = [head, ...rows].map((r) => r.map(cell).join(",")).join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv" }));
+  a.download = `hd-events-jobs-${todayKey()}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
 function jobs() {
   if (jobEditorOpen) return jobEditor();
-  return `<div class="panel jobs-page"><div class="jobs-head"><h2 style="margin:0">Jobs</h2><input class="field" placeholder="Search jobs, clients, venues…" value="${esc(jobQuery)}" oninput="jobQuery=this.value;$('jobList').innerHTML=jobList()"><select class="field" onchange="jobFilter=this.value;$('jobList').innerHTML=jobList()">${[["active", "Active (not finished)"], ["upcoming", "Upcoming (today on)"], ["all", "All jobs"], ["late", "Late returns"], ...(me.money ? [["unpaid", "Invoices unpaid"]] : []), ...STAGES.map((s) => [s, STAGE_LABELS[s]])].map(([v, l]) => `<option value="${v}" ${v === jobFilter ? "selected" : ""}>${l} (${jobsIn(v).length})</option>`).join("")}</select>${canWrite("jobs") && db.jobTemplates.length ? `<select class="field" style="max-width:240px" aria-label="New job from a template" onchange="if(this.value)newJobFromTemplate(Number(this.value))"><option value="">New job from template…</option>${db.jobTemplates.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join("")}</select>` : ""}${canWrite("jobs") ? `<button class="btn" onclick="newJob()">+ New job</button>` : ""}</div>${templateList()}<div id="jobList" class="job-cards">${jobList()}</div></div>`;
+  const tabsRow = [["active", "Active"], ["upcoming", "Upcoming"], ["late", "Late"], ["shortage", "With shortage"], ["all", "All"]];
+  return `<div class="panel jobs-page"><div class="jobs-head"><h2 style="margin:0">Jobs</h2><input class="field" placeholder="Search jobs, clients, venues…" value="${esc(jobQuery)}" oninput="jobQuery=this.value;refreshJobList()"><select class="field" aria-label="Stage" onchange="jobFilter=this.value;render()">${[["active", "Active (not finished)"], ["upcoming", "Upcoming (today on)"], ["all", "All jobs"], ["late", "Late returns"], ["shortage", "With shortage"], ...(me.money ? [["unpaid", "Invoices unpaid"]] : []), ...STAGES.map((s) => [s, STAGE_LABELS[s]])].map(([v, l]) => `<option value="${v}" ${v === jobFilter ? "selected" : ""}>${l} (${jobsIn(v).length})</option>`).join("")}</select>${me.money ? `<select class="field" aria-label="Payment status" onchange="jobPay=this.value;refreshJobList()"><option value="">Any payment status</option>${["Not invoiced", ...PAYMENT_STATUSES.filter((x) => x !== "No charge")].map((v) => `<option ${v === jobPay ? "selected" : ""}>${v}</option>`).join("")}</select>` : ""}${canWrite("jobs") && db.jobTemplates.length ? `<select class="field" style="max-width:240px" aria-label="New job from a template" onchange="if(this.value)newJobFromTemplate(Number(this.value))"><option value="">New job from template…</option>${db.jobTemplates.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join("")}</select>` : ""}${canWrite("jobs") ? `<button class="btn" onclick="newJob()">+ New job</button>` : ""}</div>
+    <div class="job-tabs" role="tablist">${tabsRow.map(([v, l]) => `<button role="tab" class="${v === jobFilter ? "active" : ""}" aria-selected="${v === jobFilter}" onclick="jobFilter='${v}';render()">${l} <span>${jobsIn(v).length}</span></button>`).join("")}<button class="btn small secondary" style="margin-left:auto" onclick="exportJobsCsv()">Export CSV</button></div>
+    <div id="jobTiles">${jobTiles()}</div>${templateList()}<div id="jobList" class="job-cards">${jobList()}</div></div>`;
 }
 // The jobs in a Jobs-list filter: a stage, "active", "all" or "late". Uses the same stage the workflow sets.
 function jobsIn(filter) {
@@ -229,6 +291,7 @@ function jobsIn(filter) {
   return db.jobs.filter((j) =>
     filter === "all" ? true
     : filter === "late" ? isLate(j)
+    : filter === "shortage" ? ["enquiry", "quote", "booked", "out"].includes(stageOf(j)) && jobShortages(j).length > 0
     : filter === "upcoming" ? !(jobDays(j)?.[1] || jobDays(j)?.[0]) || (jobDays(j)?.[1] || jobDays(j)?.[0]) >= today
     : filter === "unpaid" ? !!j.invoiceSentAt && !j.paidAt
     : filter === "active" ? stageOf(j) !== "invoiced" || (!!j.invoiceSentAt && !j.paidAt)
@@ -236,17 +299,13 @@ function jobsIn(filter) {
   );
 }
 function jobList() {
-  const q = jobQuery.toLowerCase();
-  const list = db.jobs
-    .filter((j) => jobsIn(jobFilter).includes(j))
-    .filter((j) => !q || [j.title, j.client, j.venue].join(" ").toLowerCase().includes(q))
-    .sort((a, b) => (a.start || "9999").localeCompare(b.start || "9999"));
+  const list = filteredJobs();
   if (!list.length) return db.jobs.length ? '<p class="empty">No jobs match.</p>' : '<p class="empty">Create your first job and add its equipment list.</p>';
   return list
     .map((j) => {
       const issues = jobShortages(j);
       const items = (j.kit || []).reduce((n, k) => n + Number(k.qty), 0);
-      return `<div class="jobcard"><div class="head"><div><b>${esc(j.title)}</b><div class="muted">${esc(j.client || "No client")} · ${esc(fmtRange(j))}</div></div>${stageTag(j)}</div>${j.acceptedAt ? `<div class="accepted-line">Accepted ${j.acceptedVia === "client link" ? "online by " + esc(j.acceptedBy) : ""} on ${esc(fmtDay(j.acceptedAt.slice(0, 10), { day: "numeric", month: "short" }))}${j.invoiceNo ? " · Invoice " + esc(j.invoiceNo) + (j.paidAt ? " paid" : j.invoiceSentAt ? " sent, awaiting payment" : " not sent yet") : ""}</div>` : j.quoteSentAt && stageOf(j) === "quote" ? `<div class="accepted-line muted">Quote sent ${esc(fmtDay(j.quoteSentAt.slice(0, 10), { day: "numeric", month: "short" }))}${j.quoteToken ? ` · <a href="${esc(clientLink(j))}" target="_blank" rel="noopener">client's quote page</a>` : ""}</div>` : ""}${canWrite("jobs") && nextActions(j) ? `<div class="next-step"><span class="muted">Next step</span>${nextActions(j)}</div>` : ""}${(() => { const inv = db.crewInvites.filter((i) => String(i.jobId) === String(j.id)); if (!inv.length) return ""; const st = (i) => (i.status === "Accepted" ? "accepted" : i.status === "Declined" ? "declined" : i.status === "Invited" ? "invited" : "not sent"); return `<div class="crew-line">Crew: ${inv.map((i) => `<span class="crew-${st(i).replace(" ", "-")}">${esc(db.staff.find((m) => String(m.id) === String(i.staffId))?.name || "?")} (${st(i)})</span>`).join(", ")}</div>`; })()}${reportsBadge(j) ? `<div class="toolbar" style="margin:6px 0 0">${reportsBadge(j)}</div>` : ""}<p class="muted">${(j.kit || []).length} equipment types · ${items} items · ${money(jobValue(j))}${issues.length ? ` · <span class="tag warning">${issues.length} shortage(s)</span>` : ""}${bookingTag(j) ? " · " + bookingTag(j) : ""}${isLate(j) ? ` · <span class="tag danger-tag">Late return</span>` : ""}${(() => { const l = loadCheck(j, db.inventory, vehicleList()); return l.over ? ` · <span class="tag warning">Overloaded: ${kg(l.kg)} of ${kg(l.payload)}</span>` : l.kg ? ` · ${kg(l.kg)}` : ""; })()}</p><div class="jobactions"><button class="btn small" onclick="editJob(${j.id})">Edit</button>${(() => { const pl = db.plans.find((x) => x.jobId === j.id); return pl ? `<button class="btn small secondary" onclick="openPlan(${pl.id})">Plan</button>` : `<button class="btn small secondary" onclick="planDialog(${j.id})">Plan event</button>`; })()}<button class="btn small secondary" onclick="printJob(${j.id})">Picking list</button>${canWrite("jobs") ? `<button class="btn small secondary" onclick="openBooking(${j.id},'out')">Book out</button><button class="btn small secondary" onclick="openBooking(${j.id},'in')">Book in</button>` : ""}${me.owner ? `<button class="btn small secondary" onclick="sendToClient(${j.id},'invoice')">${j.invoiceNo ? "Send invoice " + esc(j.invoiceNo) : "Send invoice"}</button>` : ""}${me.money ? `<button class="btn small secondary" onclick="sendToClient(${j.id},'quote')">Send quote</button>` : ""}<button class="btn small secondary" onclick="crewInviteEditor(${j.id})">Crew</button>${driveButtons("job:" + j.id, `saveJobToDrive(${j.id})`)}<button class="btn small secondary" onclick="duplicateJob(${j.id})">Duplicate</button>${canWrite("jobTemplates") ? `<button class="btn small secondary" onclick="templateFromJob(${j.id})">Save as template</button>` : ""}<button class="btn small danger" onclick="deleteJob(${j.id})">Delete</button></div></div>`;
+      return `<div class="jobcard"><div class="head"><div><b>${esc(j.title)}</b><div class="muted">${esc(j.client || "No client")} · ${esc(fmtRange(j))}</div></div>${stageTag(j)}</div>${j.acceptedAt ? `<div class="accepted-line">Accepted ${j.acceptedVia === "client link" ? "online by " + esc(j.acceptedBy) : ""} on ${esc(fmtDay(j.acceptedAt.slice(0, 10), { day: "numeric", month: "short" }))}${j.invoiceNo ? " · Invoice " + esc(j.invoiceNo) + (me.money ? ` · <a href="#" onclick="openPayments(${j.id});return false">${esc(payStatus(j).status === "Paid" ? "Paid" : payStatus(j).status + (j.invoiceSentAt ? "" : " (invoice not sent)"))} · payments</a>` : j.paidAt ? " paid" : j.invoiceSentAt ? " sent, awaiting payment" : " not sent yet") : ""}</div>` : j.quoteSentAt && stageOf(j) === "quote" ? `<div class="accepted-line muted">Quote sent ${esc(fmtDay(j.quoteSentAt.slice(0, 10), { day: "numeric", month: "short" }))}${j.quoteToken ? ` · <a href="${esc(clientLink(j))}" target="_blank" rel="noopener">client's quote page</a>` : ""}</div>` : ""}${canWrite("jobs") && nextActions(j) ? `<div class="next-step"><span class="muted">Next step</span>${nextActions(j)}</div>` : ""}${(() => { const inv = db.crewInvites.filter((i) => String(i.jobId) === String(j.id)); if (!inv.length) return ""; const st = (i) => (i.status === "Accepted" ? "accepted" : i.status === "Declined" ? "declined" : i.status === "Invited" ? "invited" : "not sent"); return `<div class="crew-line">Crew: ${inv.map((i) => `<span class="crew-${st(i).replace(" ", "-")}">${esc(db.staff.find((m) => String(m.id) === String(i.staffId))?.name || "?")} (${st(i)})</span>`).join(", ")}</div>`; })()}${reportsBadge(j) ? `<div class="toolbar" style="margin:6px 0 0">${reportsBadge(j)}</div>` : ""}<p class="muted">${(j.kit || []).length} equipment types · ${items} items · ${money(jobValue(j))}${issues.length ? ` · <span class="tag warning">${issues.length} shortage(s)</span>` : ""}${bookingTag(j) ? " · " + bookingTag(j) : ""}${isLate(j) ? ` · <span class="tag danger-tag">Late return</span>` : ""}${(() => { const l = loadCheck(j, db.inventory, vehicleList()); return l.over ? ` · <span class="tag warning">Overloaded: ${kg(l.kg)} of ${kg(l.payload)}</span>` : l.kg ? ` · ${kg(l.kg)}` : ""; })()}</p><div class="jobactions"><button class="btn small" onclick="editJob(${j.id})">Edit</button>${(() => { const pl = db.plans.find((x) => x.jobId === j.id); return pl ? `<button class="btn small secondary" onclick="openPlan(${pl.id})">Plan</button>` : `<button class="btn small secondary" onclick="planDialog(${j.id})">Plan event</button>`; })()}<button class="btn small secondary" onclick="printJob(${j.id})">Picking list</button>${canWrite("jobs") ? `<button class="btn small secondary" onclick="openBooking(${j.id},'out')">Book out</button><button class="btn small secondary" onclick="openBooking(${j.id},'in')">Book in</button>` : ""}${me.owner ? `<button class="btn small secondary" onclick="sendToClient(${j.id},'invoice')">${j.invoiceNo ? "Send invoice " + esc(j.invoiceNo) : "Send invoice"}</button>` : ""}${me.money ? `<button class="btn small secondary" onclick="sendToClient(${j.id},'quote')">Send quote</button>` : ""}<button class="btn small secondary" onclick="crewInviteEditor(${j.id})">Crew</button>${driveButtons("job:" + j.id, `saveJobToDrive(${j.id})`)}<button class="btn small secondary" onclick="duplicateJob(${j.id})">Duplicate</button>${canWrite("jobTemplates") ? `<button class="btn small secondary" onclick="templateFromJob(${j.id})">Save as template</button>` : ""}<button class="btn small danger" onclick="deleteJob(${j.id})">Delete</button></div></div>`;
     })
     .join("");
 }
@@ -308,6 +367,8 @@ function saveJob(e) {
     ...d,
     booking,
     discount: Math.max(0, Number(d.discount) || 0),
+    discountPct: Math.min(100, Math.max(0, Number(d.discountPct) || 0)),
+    depositPct: Math.min(100, Math.max(0, Number(d.depositPct) || 0)),
     client: clientName(d.clientId),
     kit: draftKit.map((k) => ({
       ...k,
@@ -428,7 +489,7 @@ function jobValue(j) {
 // A template keeps a job's kit, crew lines, client, venue, lead crew, schedule and notes, but no dates,
 // stage, quote, invoice or booking history. "New job from template" opens the job builder pre-filled.
 let jobFromTemplate = null;
-const TEMPLATE_FIELDS = ["title", "clientId", "client", "venue", "staffId", "load", "notes", "discount", "vehicleIds"];
+const TEMPLATE_FIELDS = ["title", "clientId", "client", "venue", "staffId", "load", "notes", "discount", "discountPct", "depositPct", "vehicleIds", "terms"];
 function templateData(src, kit) {
   const t = {};
   for (const f of TEMPLATE_FIELDS) if (src[f] !== undefined && src[f] !== "") t[f] = src[f];

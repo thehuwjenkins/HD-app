@@ -90,8 +90,8 @@ test('pay by card: fee added for a business client, payment recorded when Stripe
   await post(env, '/q/' + TOK + '/accept', {name: 'Sam', agree: 'on'});
   const invoice = await (await get(env, '/q/' + TOK)).text();
   assert.match(invoice, /INVOICE/);
-  assert.match(invoice, /card processing fee of <b>£7\.67<\/b>/); // £490 due
-  assert.match(invoice, /Pay £497\.67 by card/);
+  assert.match(invoice, /card processing fee is included/); // £490 due + £7.67 fee
+  assert.match(invoice, /Pay £497\.67</);
   assert.match(invoice, /Or pay by bank transfer/);
   // Cross-site posts can't start a payment.
   assert.equal((await post(env, '/q/' + TOK + '/pay', {}, {origin: 'https://evil.example'})).status, 403);
@@ -127,7 +127,7 @@ test('pay by card: fee added for a business client, payment recorded when Stripe
 test('a payment the client never came back from is picked up when the link is opened', async () => {
   const env = await setup({env: {STRIPE_SECRET_KEY: 'sk_test_x'}});
   await post(env, '/q/' + TOK + '/accept', {name: 'Sam', agree: 'on'});
-  assert.match(await (await get(env, '/q/' + TOK)).text(), /Pay £490\.00 by card/, 'private client: no fee');
+  assert.match(await (await get(env, '/q/' + TOK)).text(), /Pay £490\.00</, 'private client: no fee');
   await post(env, '/q/' + TOK + '/pay');
   const id = (await job(env)).cardSessions[0].id;
   sessions[id].payment_status = 'paid';
@@ -172,4 +172,34 @@ test('PAT, insurance and risk assessment documents are released once the invoice
   assert.equal(await d.text(), '%PDF pat');
   assert.equal((await get(env, '/q/' + TOK + '/doc/1')).status, 404, 'expired');
   assert.equal((await get(env, '/q/' + 'd'.repeat(40) + '/doc/0')).status, 404);
+});
+
+test('with a deposit, the client can pay just the deposit by card, then the balance', async () => {
+  const env = await setup({env: {STRIPE_SECRET_KEY: 'sk_test_x'}});
+  const {applyChanges} = await import('../src/store.js');
+  let {state, versions} = await loadState(env);
+  let j = state.jobs.find((x) => x.quoteToken === TOK);
+  await applyChanges(env, OWNER, [{collection: 'jobs', id: j.id, op: 'put', version: versions.jobs[j.id], data: {...j, depositPct: 50}}]);
+  await post(env, '/q/' + TOK + '/accept', {name: 'Sam', agree: 'on'});
+  const html = await (await get(env, '/q/' + TOK)).text();
+  assert.match(html, /Deposit of £245\.00 due now/);
+  assert.match(html, /Balance of £245\.00 due by 5 June 2027/);
+  assert.match(html, /Pay deposit £245\.00/);
+  assert.match(html, /Pay in full £490\.00/);
+  await post(env, '/q/' + TOK + '/pay', {part: 'deposit'});
+  const call = stripeCalls.at(-1);
+  assert.equal(call.body.get('line_items[0][price_data][unit_amount]'), '24500');
+  assert.match(call.body.get('line_items[0][price_data][product_data][name]'), /^Deposit · /);
+  const id = (await job(env)).cardSessions.at(-1).id;
+  sessions[id].payment_status = 'paid';
+  sessions[id].metadata.kind = call.body.get('metadata[kind]');
+  await get(env, `/q/${TOK}/paid?s=${id}`);
+  j = await job(env);
+  assert.deepEqual(j.payments.map((p) => [p.amount, p.kind]), [[245, 'deposit']]);
+  assert.equal(j.paidAt, undefined);
+  const after = await (await get(env, '/q/' + TOK)).text();
+  assert.match(after, /Deposit paid/);
+  assert.match(after, /Balance of <b>£245\.00<\/b> due by 5 June 2027/);
+  assert.match(after, /Pay £245\.00</);
+  assert.doesNotMatch(after, /Pay deposit/);
 });

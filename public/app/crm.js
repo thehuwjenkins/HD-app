@@ -74,7 +74,7 @@ function editClient(id) {
   root.id = "clientDialog";
   const f = (k, l, type = "text") => `<label><span class="muted">${l}</span><input class="field" name="${k}" type="${type}" value="${esc(c[k] || "")}" ${k === "name" ? "required" : ""}></label>`;
   root.innerHTML = `<form class="panel" onsubmit="saveClient(event,${id})"><div class="line"><h2 style="margin:0">Edit contact</h2><button type="button" class="btn small ghost" onclick="$('clientDialog').remove()">Close</button></div>
-    <div class="form" style="margin-top:14px">${f("name", "Contact name")}${f("company", "Company")}${f("email", "Email", "email")}${f("phone", "Phone", "tel")}<label class="wide"><span class="muted">Postal address</span><textarea class="field" name="address" rows="2">${esc(c.address || "")}</textarea></label></div>
+    <div class="form" style="margin-top:14px">${f("name", "Contact name")}${f("company", "Company")}${f("email", "Email", "email")}${f("phone", "Phone", "tel")}${me.money ? `<label><span class="muted">Standing discount % (optional)</span><input class="field" name="discountPct" type="number" min="0" max="100" step="0.5" value="${esc(c.discountPct ?? "")}"></label><label><span class="muted">Deposit % for their jobs (optional)</span><input class="field" name="depositPct" type="number" min="0" max="100" step="5" value="${esc(c.depositPct ?? "")}" placeholder="Company default"></label>` : ""}<label class="wide"><span class="muted">Postal address</span><textarea class="field" name="address" rows="2">${esc(c.address || "")}</textarea></label></div>
     <button class="btn big" type="submit">Save contact</button></form>`;
   document.body.appendChild(root);
 }
@@ -84,6 +84,8 @@ function saveClient(e, id) {
     d = data(e),
     oldName = c.name;
   Object.assign(c, { name: d.name.trim(), company: d.company.trim(), email: d.email.trim(), phone: d.phone.trim(), address: d.address.trim() });
+  // Blank means "use the company default"; only people who can see money have these fields.
+  for (const k of ["discountPct", "depositPct"]) if (k in d) { if (String(d[k]).trim() === "") delete c[k]; else c[k] = Math.min(100, Math.max(0, Number(d[k]) || 0)); }
   db.jobs.forEach((j) => {
     if (String(j.clientId) === String(id) || (!j.clientId && j.client === oldName)) {
       j.client = c.name;

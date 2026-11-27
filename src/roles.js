@@ -11,7 +11,7 @@
 export const SECTIONS = {
   overview: {label: 'Overview', pages: ['Overview'], write: [], read: []},
   planner: {label: 'Event Planner', pages: ['Event Planner', 'Sign-ups'], write: ['plans'], read: ['plans', 'staff']},
-  jobs: {label: 'Jobs, pipeline & calendar', pages: ['Pipeline', 'Calendar', 'Jobs', 'Cross-hire'], write: ['jobs', 'crewInvites', 'crossHires', 'clients', 'jobReports', 'jobTemplates'], read: ['jobs', 'crewInvites', 'crossHires', 'inventory', 'packages', 'staff', 'clients', 'jobReports', 'jobTemplates']},
+  jobs: {label: 'Jobs, pipeline & calendar', pages: ['Pipeline', 'Out & back', 'Calendar', 'Jobs', 'Cross-hire'], write: ['jobs', 'crewInvites', 'crossHires', 'clients', 'jobReports', 'jobTemplates'], read: ['jobs', 'crewInvites', 'crossHires', 'inventory', 'packages', 'staff', 'clients', 'jobReports', 'jobTemplates']},
   tasks: {label: 'Tasks & projects', pages: ['My Workday', 'Projects'], write: ['tasks', 'projects'], read: ['tasks', 'projects']},
   kit: {label: 'Kit & packages', pages: ['Inventory', 'Packages', 'Cross-hire'], write: ['inventory', 'packages', 'crossHires'], read: ['inventory', 'packages', 'crossHires', 'jobs']},
   people: {label: 'Staff & contacts', pages: ['Staff', 'Crew Portal', 'CRM'], write: ['staff', 'clients', 'crewInvites'], read: ['staff', 'clients', 'crewInvites', 'jobs']},
@@ -22,7 +22,7 @@ export const SECTION_KEYS = Object.keys(SECTIONS);
 export const OWNER_PAGES = ['Branding', 'People & access'];
 
 // Money fields per collection (top level), plus job kit line prices.
-const MONEY_FIELDS = {inventory: ['price', 'value', 'valueEst', 'valueNote'], jobs: ['discount'], jobTemplates: ['discount'], crewInvites: ['fee'], packages: ['price']};
+const MONEY_FIELDS = {inventory: ['price', 'value', 'valueEst', 'valueNote'], jobs: ['discount', 'discountPct', 'depositPct', 'payments', 'cardSessions'], clients: ['discountPct', 'depositPct'], jobTemplates: ['discount', 'discountPct', 'depositPct'], crewInvites: ['fee'], packages: ['price']};
 // Job fields shown on plans to people who can see the planner but not jobs.
 const JOB_SUMMARY = ['id', 'title', 'start', 'end', 'venue', 'stage', 'booking', 'client'];
 

@@ -73,18 +73,12 @@ function jobStatusTags(j) {
   const st = stageOf(j);
   return [
     st === "quote" && j.acceptedAt ? `<span class="tag success">Accepted ${d(j.acceptedAt)}: book it</span>` : st === "quote" && j.quoteSentAt ? `<span class="tag">Quote sent ${d(j.quoteSentAt)}</span>` : "",
-    j.paidAt ? `<span class="tag success">${esc(j.invoiceNo || "Invoice")} paid</span>` : j.invoiceNo ? `<span class="tag ${j.invoiceSentAt ? "" : "warning"}">${esc(j.invoiceNo)}${j.invoiceSentAt ? " sent · awaiting payment" : " not sent"}</span>` : "",
+    j.invoiceNo && me.money && (j.invoiceSentAt || (j.payments || []).length || j.paidAt) ? paymentTag(j) : j.paidAt ? `<span class="tag success">${esc(j.invoiceNo || "Invoice")} paid</span>` : j.invoiceNo ? `<span class="tag ${j.invoiceSentAt ? "" : "warning"}">${esc(j.invoiceNo)}${j.invoiceSentAt ? " sent · awaiting payment" : " not sent"}</span>` : "",
   ].join("");
 }
-// Record payment of the invoice: the end of the job's journey.
+// Record payment of the invoice: opens the job's payments, with the balance ready to record.
 function markPaid(id) {
-  const j = db.jobs.find((x) => x.id === id);
-  if (!j || !confirm(`Mark ${j.invoiceNo || "the invoice"} for ${j.title} (${money(jobValue(j))}) as paid?`)) return;
-  j.paidAt = new Date().toISOString();
-  if (["booked", "out", "returned"].includes(stageOf(j)) && stageOf(j) === "returned") moveTo(id, "invoiced");
-  save();
-  render();
-  toast(`${esc(j.invoiceNo || j.title)} marked as paid`);
+  openPayments(id);
 }
 // Open the Jobs list showing one stage (or "all" / "active").
 function showJobs(filter) {
@@ -110,7 +104,7 @@ function nextActions(j) {
       booked: b("Print picking list", `printJob(${j.id})`) + b("Book out", `openBooking(${j.id},'out')`) + (owner ? b("Send invoice", `sendToClient(${j.id},'invoice')`, "secondary") : ""),
       out: b("Book in", `openBooking(${j.id},'in')`) + b("Book out the rest", `openBooking(${j.id},'out')`, "secondary") + (owner && !j.invoiceSentAt ? b("Send invoice", `sendToClient(${j.id},'invoice')`, "secondary") : ""),
       returned: (bookingProgress(j)?.still ? b("Book in missing kit", `openBooking(${j.id},'in')`, "secondary") : "") + (owner ? b("Send invoice", `sendToClient(${j.id},'invoice')`) : "") + b("Mark as invoiced", `moveTo(${j.id},'invoiced')`, owner ? "secondary" : ""),
-      invoiced: owner && j.invoiceSentAt && !j.paidAt ? b("Mark as paid", `markPaid(${j.id})`) : owner && !j.invoiceSentAt ? b("Send invoice", `sendToClient(${j.id},'invoice')`) : "",
+      invoiced: owner && j.invoiceSentAt && !j.paidAt ? b("Record payment", `markPaid(${j.id})`) : owner && !j.invoiceSentAt ? b("Send invoice", `sendToClient(${j.id},'invoice')`) : "",
     }[st] || ""
   );
 }

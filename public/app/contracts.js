@@ -17,24 +17,27 @@ function paymentsPanel() {
     fixed = hasNum(co.cardFeeFixed) ? Number(co.cardFeeFixed) : 0.2;
   const ex = cardFee(1000, co, { company: "Example Ltd" });
   return panel(
-    "Card payments",
+    "Payments, deposits & card fees",
     `<p>${stripeStatus === true ? '<span class="tag success">Stripe connected</span> Clients see a <b>Pay by card</b> button on their invoice link (cards, Apple Pay, Google Pay). Payments are recorded on the job automatically.' : stripeStatus === "checking" ? "Checking Stripe…" : '<span class="tag warning">Stripe not connected</span> Add your Stripe secret key in Cloudflare as <code>STRIPE_SECRET_KEY</code> (Workers → hd-events-hq → Settings → Variables and secrets). Until then, invoices show bank transfer only.'}</p>
     <form class="form" onsubmit="saveCardFee(event)">
+      <label><span class="muted">Default deposit % on new jobs (0 = none)</span><input class="field" name="depositPct" type="number" min="0" max="100" step="5" value="${hasNum(co.depositPct) ? Number(co.depositPct) : 0}"></label>
+      <label><span class="muted">Balance due (days before the event)</span><input class="field" name="balanceDays" type="number" min="0" max="90" step="1" value="${hasNum(co.balanceDays) ? Number(co.balanceDays) : 7}"></label>
+      <div class="wide"><p class="hint" style="margin-top:0">Clients can have their own deposit % (Clients → edit). The deposit and balance date show on the invoice link, and clients can pay the deposit or the full amount by card.</p></div>
       <label><span class="muted">Card processing fee</span><select class="field" name="cardFeeMode"><option value="business" ${mode === "business" ? "selected" : ""}>Add it for business clients (client has a company name)</option><option value="none" ${mode === "none" ? "selected" : ""}>Don't add a fee (we absorb it)</option></select></label>
       <label><span class="muted">Fee % (Stripe UK cards: 1.5)</span><input class="field" name="cardFeePct" type="number" min="0" max="10" step="0.01" value="${pct}"></label>
       <label><span class="muted">Fixed fee £ (Stripe: 0.20)</span><input class="field" name="cardFeeFixed" type="number" min="0" max="2" step="0.01" value="${fixed}"></label>
       <div class="wide"><p class="hint">${mode === "none" ? "No fee is added." : `Example: a business client paying a ${money(1000)} invoice by card pays ${money(1000 + ex)} (fee ${money(ex)}), so you still receive about ${money(1000)} after Stripe's charge. Private clients pay the invoice amount.`}<br><b>Why not everyone?</b> UK law bans adding a card fee for consumers, and for most cards that businesses use too. It's only allowed on genuine corporate/commercial cards. "Business clients" is the closest HQ can get, but if a business client pays with an ordinary debit or credit card the fee is technically not allowed. If in doubt, choose "Don't add a fee" and build it into your prices, or offer a discount for bank transfer.</p></div>
-      <div class="wide toolbar"><button class="btn" type="submit">Save card payment settings</button>${stripeStatus === true ? '<button class="btn secondary" type="button" onclick="checkCardPayments()">Check for card payments now</button>' : ""}</div>
+      <div class="wide toolbar"><button class="btn" type="submit">Save payment settings</button>${stripeStatus === true ? '<button class="btn secondary" type="button" onclick="checkCardPayments()">Check for card payments now</button>' : ""}</div>
     </form>`,
   );
 }
 function saveCardFee(e) {
   e.preventDefault();
   const d = data(e);
-  db.company = { ...(db.company || {}), cardFeeMode: d.cardFeeMode === "none" ? "none" : "business", cardFeePct: Number(d.cardFeePct) || 0, cardFeeFixed: Number(d.cardFeeFixed) || 0 };
+  db.company = { ...(db.company || {}), cardFeeMode: d.cardFeeMode === "none" ? "none" : "business", cardFeePct: Number(d.cardFeePct) || 0, cardFeeFixed: Number(d.cardFeeFixed) || 0, depositPct: Math.min(100, Math.max(0, Number(d.depositPct) || 0)), balanceDays: Math.min(90, Math.max(0, Math.round(Number(d.balanceDays) || 0))) };
   save();
   render();
-  toast("Card payment settings saved");
+  toast("Payment settings saved");
 }
 async function checkCardPayments() {
   try {
