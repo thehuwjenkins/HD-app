@@ -9,6 +9,7 @@ import {whoIs,describe,visibleState,prepareChanges,checkAccessSetting} from './r
 import {syncAccess,accessStatus} from './accesssync.js';
 import {handleCrew} from './crew.js';
 import {handleClientLink} from './clientlink.js';
+import {stripeReady,checkPendingPayments} from './payments.js';
 import {handlePublicEvents} from './publicevents.js';
 import {handleSignup,signupCount,listSignups,deleteSignups,LISTS} from './signups.js';
 import {connectRedirect,finishConnect,googleStatus,disconnect,saveToDrive,eventFolderLink} from './google.js';
@@ -122,6 +123,12 @@ async function api(req,env,url,email,owner){
     const denied=writeCheck(req,url,owner);if(denied)return denied;
     return guarded(async()=>json({deleted:await deleteSignups(env,(await readJson(req,100_000)).ids)}));
   }
+  // Card payments: whether Stripe is connected, and a manual check for payments not yet picked up.
+  if(method==='GET'&&path==='/api/payments/status')return json({stripe:stripeReady(env)});
+  if(method==='POST'&&path==='/api/payments/check'){
+    const denied=writeCheck(req,url,owner);if(denied)return denied;
+    return guarded(async()=>json({recorded:await checkPendingPayments(env)}));
+  }
   if(method==='GET'&&path==='/api/access/status')return json(await accessStatus(env,(await loadState(env)).state));
   if(method==='POST'&&path==='/api/access/sync'){
     const denied=writeCheck(req,url,owner);if(denied)return denied;
@@ -212,5 +219,7 @@ async scheduled(event,env,ctx){
   ctx.waitUntil(runBackup(env,{kind:'daily',now:new Date(event.scheduledTime)}));
   // Nightly check that the Cloudflare sign-in list still matches Staff and People & access.
   ctx.waitUntil((async()=>{if(await isMigrated(env))await syncAccess(env,(await loadState(env)).state);})().catch(()=>{}));
+  // Card payments whose client closed the tab before coming back to the invoice link.
+  ctx.waitUntil(checkPendingPayments(env).catch(()=>{}));
 }
 };

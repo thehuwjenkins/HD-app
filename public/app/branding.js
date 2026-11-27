@@ -1,6 +1,7 @@
 function saveCompanyDetails(e) {
   e.preventDefault();
-  db.company = Object.fromEntries(new FormData(e.target));
+  // Merge, so settings kept elsewhere (terms, card fee, client documents) aren't wiped.
+  db.company = { ...(db.company || {}), ...Object.fromEntries(new FormData(e.target)) };
   save();
   render();
 }
@@ -40,7 +41,7 @@ function branding() {
       <div class="jobcard doc-logo-preview"><img src="${esc((db.branding || {}).docLogo || DOC_LOGO)}" alt="Document logo"></div>
       <label class="muted">Choose a different PNG, WebP or SVG (up to 5 MB)</label><input class="field" type="file" accept="image/png,image/webp,image/svg+xml" onchange="uploadDocLogo(this)">
       ${(db.branding || {}).docLogo ? `<div class="toolbar" style="margin-top:10px"><button class="btn secondary" onclick="resetDocLogo()">Use the standard HD Events document logo</button></div>` : ""}`,
-  ) + drivePanel();
+  ) + paymentsPanel() + contractsPanel() + clientDocsPanel() + drivePanel();
 }
 async function uploadBrandLogo(input) {
   let file = input.files && input.files[0];

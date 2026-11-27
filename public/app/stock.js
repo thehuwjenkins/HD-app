@@ -203,6 +203,11 @@ export function validate(state) {
     if(kept>item.qty-item.service)throw Error(item.name+' — '+kept+' kept together in packages but only '+(item.qty-item.service)+' in service');
   }
   for(const job of state.jobs){
+    if(job.payments!==undefined){
+      if(!Array.isArray(job.payments))throw Error(String(job.title)+' — invalid payments');
+      for(const p of job.payments)if(!p||!(Number(p.amount)>0)||!(Number(p.fee||0)>=0)||typeof p.at!=='string')throw Error(String(job.title)+' — invalid payment entry');
+    }
+    if(job.terms!==undefined&&!['hire','install','none'].includes(job.terms))throw Error(String(job.title)+' — invalid terms choice');
     if(job.movements!==undefined){
       if(!Array.isArray(job.movements))throw Error(String(job.title)+' — invalid booking out / in log');
       for(const mv of job.movements)if(!mv||typeof mv.item!=='string'||!['out','in'].includes(mv.dir)||!Number.isSafeInteger(mv.qty)||mv.qty<1)throw Error(String(job.title)+' — invalid booking out / in entry');
@@ -423,5 +428,41 @@ export function freeFor(job,state,name){
   const owned=item.qty-item.service-setAside(state,name);
   return Math.max(0,owned-(a<b?others:outNow(state,name).qty));
 }
+// ---------- Payments ----------
+// Card payments go through Stripe. UK law bans adding a card fee for consumers (and for most cards a
+// business pays with), so the fee is only added for business clients (a company name on the client),
+// and only when cardFeeMode is 'business'. The fee is grossed up so the payment covers Stripe's cut.
+export function cardFee(amount,company={},client={}){
+  const mode=company.cardFeeMode||'business';
+  if(mode==='none'||!(amount>0)||(mode==='business'&&!String(client.company||'').trim()))return 0;
+  const pct=Number.isFinite(Number(company.cardFeePct))&&company.cardFeePct!==''?Number(company.cardFeePct):1.5;
+  const fixed=Number.isFinite(Number(company.cardFeeFixed))&&company.cardFeeFixed!==''?Number(company.cardFeeFixed):0.2;
+  if(!(pct>=0&&pct<20&&fixed>=0&&fixed<5))return 0;
+  const charge=Math.ceil(((amount+fixed)/(1-pct/100))*100)/100;
+  return Math.round((charge-amount)*100)/100;
+}
+// What has been paid against the invoice (fees excluded) and what is still due.
+export function paymentStatus(job,{vatRegistered=false}={}){
+  const total=quoteSummary(job,{vatRegistered}).gross;
+  const paid=Math.round((job.payments||[]).reduce((s,p)=>s+(Number(p.amount)||0),0)*100)/100;
+  return {total,paid,due:Math.max(0,Math.round((total-paid)*100)/100),fully:!!job.paidAt||(total>0&&paid>=total-0.005)};
+}
+// ---------- Terms of hire ----------
+export const TERMS_KINDS={hire:'Terms of Hire',install:'Installation Agreement'};
+// The terms that apply to a job, with 17hats-style tokens filled in, e.g. [client name], [event date].
+export function jobTerms(job,company={},client={}){
+  const kind=job.terms==='none'?null:job.terms==='install'?'install':'hire';
+  const raw=kind?String(company[kind==='install'?'termsInstall':'termsHire']||'').trim():'';
+  if(!kind||!raw)return null;
+  const day=s=>s?new Date(String(s).slice(0,10)+'T12:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'}):'';
+  const tokens={'client name':client.name||job.client||'','client company':client.company||'','company name':company.name||'HD Events','business name':company.name||'HD Events',
+    'project name':job.title||'','event name':job.title||'','event date':day(job.start),'event end date':day(job.end),'venue':job.venue||'','quote number':'Ref '+job.id,'invoice number':job.invoiceNo||''};
+  // 17hats writes some tokens as "[account] Company name" / "[project] Project name"; ours are "[client name]".
+  const legacy={'[account] company name':tokens['company name'],'[project] project name':tokens['project name'],'[project] event date':tokens['event date'],'[project] venue':tokens['venue'],'[contact] name':tokens['client name'],'[client] name':tokens['client name'],'[contact] first name':String(tokens['client name']).split(' ')[0]};
+  let text=raw;
+  for(const [k,v] of Object.entries(legacy))text=text.replace(new RegExp(k.replace(/[[\]]/g,'\\$&'),'gi'),()=>v);
+  text=text.replace(/\[([a-z ]+)\]/gi,(m,k)=>{const v=tokens[k.trim().toLowerCase()];return v===undefined?m:v;});
+  return {kind,title:String(company[kind==='install'?'termsInstallTitle':'termsHireTitle']||'').trim()||TERMS_KINDS[kind],text};
+}
 // Shared with the browser: the owner page loads this file as a module and uses the same checks.
-if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, freeFor, outNow, pickItems, movementTotals, outstandingQty, setAside, allocated, allocatedTo, lineAmount, quoteSummary, nextInvoiceNo, packagePricing, QUOTE_SECTIONS, inventoryTotals, loadCheck, parseTable, importRows, loadItems, packVehicle, planLoad, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});
+if (typeof window !== 'undefined') Object.assign(window, {bounds, shortages, validate, STAGES, STAGE_LABELS, STAGE_BOOKING, stageOf, fingerprint, PLAN_STATUSES, DOC_KINDS, freeFor, outNow, pickItems, movementTotals, outstandingQty, setAside, allocated, allocatedTo, lineAmount, quoteSummary, nextInvoiceNo, packagePricing, cardFee, paymentStatus, TERMS_KINDS, jobTerms, QUOTE_SECTIONS, inventoryTotals, loadCheck, parseTable, importRows, loadItems, packVehicle, planLoad, GENERATOR_SIZES, powerEstimate, SUPPLIER_TYPES, supplierGaps});

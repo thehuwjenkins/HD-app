@@ -71,6 +71,7 @@ function jobEditor() {
     <label><span class="muted">Collect / prep from</span><input class="field" type="datetime-local" name="start" value="${esc(inputTime(j.start, false))}"></label>
     <label><span class="muted">Return by</span><input class="field" type="datetime-local" name="end" value="${esc(inputTime(j.end, true))}"></label>
     <label><span class="muted">Stage</span><select class="field" name="stage">${STAGES.map((v) => `<option value="${v}" ${v === stageOf(j) ? "selected" : ""}>${STAGE_LABELS[v]}</option>`).join("")}</select><span class="hint">Booked and Out on hire reserve the kit.</span></label>
+    <label><span class="muted">Contract the client signs</span><select class="field" name="terms">${[["hire", "Terms of Hire"], ["install", "Installation Agreement"], ["none", "No contract"]].map(([v, l]) => `<option value="${v}" ${v === (j.terms || "hire") ? "selected" : ""}>${l}</option>`).join("")}</select>${j.termsAgreed ? `<span class="hint">Signed by ${esc(j.termsAgreed.name)} · <a href="/q/${esc(j.quoteToken)}/terms" target="_blank" rel="noopener">view</a></span>` : ""}</label>
     <label><span class="muted">Lead crew member</span><select class="field" name="staffId"><option value="">Select staff</option>${db.staff.map((m) => `<option value="${m.id}" ${String(m.id) === String(j.staffId) ? "selected" : ""}>${esc(m.name)}</option>`).join("")}</select></label>
     <label><span class="muted">Load-in / show schedule</span><input class="field" name="load" value="${esc(j.load || "")}"></label>
     <label class="jw-wide"><span class="muted">Crew / technical notes</span><textarea class="field" name="notes" rows="2">${esc(j.notes || "")}</textarea></label>
@@ -395,7 +396,7 @@ function duplicateJob(id) {
   let j = db.jobs.find((j) => j.id === id);
   if (!j) return;
   // A fresh enquiry: same kit and details, but none of the original's quote, acceptance or invoice.
-  const { quoteToken, quoteSentAt, acceptedAt, acceptedBy, acceptedVia, needsBooking, invoiceNo, invoiceDate, invoiceSentAt, hiredOutAt, returnedAt, invoicedAt, paidAt, movements, ...rest } = j;
+  const { quoteToken, quoteSentAt, acceptedAt, acceptedBy, acceptedVia, needsBooking, invoiceNo, invoiceDate, invoiceSentAt, hiredOutAt, returnedAt, invoicedAt, paidAt, movements, payments, cardSessions, termsAgreed, ...rest } = j;
   let copy = {
     ...rest,
     booking: "Draft",
